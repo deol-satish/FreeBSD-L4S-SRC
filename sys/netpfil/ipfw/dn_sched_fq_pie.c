@@ -362,8 +362,6 @@ fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 	return m;
 }
 
-
-
 // __inline static struct mbuf *
 // fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 // 	struct fq_pie_si *si, int getts)
