@@ -203,6 +203,7 @@ enum tokens {
 	
 	TOK_PIE,
 	TOK_FQ_PIE,
+	TOK_L4S,
 	TOK_TUPDATE,
 	TOK_MAX_BURST,
 	TOK_MAX_ECNTH,
