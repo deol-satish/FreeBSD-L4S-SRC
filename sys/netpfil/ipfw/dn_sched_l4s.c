@@ -76,7 +76,7 @@
 #include <dn_test.h>
 #endif
 
-#define DN_SCHED_FQ_PIE 7
+#define DN_SCHED_L4S 8
 
 /* list of queues */
 STAILQ_HEAD(l4s_list, l4s_flow);
@@ -1383,7 +1383,7 @@ l4s_getconfig (struct dn_schk *_schk, struct dn_extra_parms *ep) {
  * data structures, and function pointers.
  */
 static struct dn_alg l4s_desc = {
-	_SI( .type = )  DN_SCHED_FQ_PIE,
+	_SI( .type = )  DN_SCHED_FQ_L4S,
 	_SI( .name = ) "L4S",
 	_SI( .flags = ) 0,
 
