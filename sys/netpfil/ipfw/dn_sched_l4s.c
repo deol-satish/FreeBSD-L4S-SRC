@@ -978,7 +978,7 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 
 	 /* classify a packet to queue number*/
 	idx = l4s_classify_flow(m, param->flows_cnt/2, si);
-	printf("L4S Is Packet ECN-Marked,%d \n",ecn_mark(m));	
+	//printf("L4S Is Packet ECN-Marked,%d \n",ecn_mark(m));	
 	
 	//printf("\nclassify done \n");
 
