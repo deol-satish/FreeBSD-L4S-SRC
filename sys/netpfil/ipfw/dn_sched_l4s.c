@@ -1,5 +1,5 @@
 /* 
- * L4S - The Low Latency Low Loss Scalable Throughput (L4S) scheduler/AQM
+ * L4S - The FlowQueue-Low Latency Low Loss Scalable Throughput (L4S) scheduler/AQM
  * 
  * Copyright (C) 2016 Centre for Advanced Internet Architectures,
  *  Swinburne University of Technology, Melbourne, Australia.
@@ -76,10 +76,20 @@
 #include <dn_test.h>
 #endif
 
-#define DN_SCHED_L4S 8
+#define DN_SCHED_FQ_PIE 7
 
 /* list of queues */
 STAILQ_HEAD(l4s_list, l4s_flow);
+
+
+uint32_t drop_prob_Pc_flow_0;
+uint32_t drop_prob_Pc_flow_1;
+uint32_t drop_prob_Pc_flow_2;
+uint32_t drop_prob_Pl_flow_3;
+uint32_t drop_prob_Pl_flow_4;
+uint32_t drop_prob_Pl_flow_5;
+
+uint32_t P_Cmax;
 
 /* L4S parameters including PIE */
 struct dn_sch_l4s_parms {
@@ -104,6 +114,7 @@ struct l4s_flow {
 	struct mq	mq;	/* list of packets */
 	struct flow_stats stats;	/* statistics */
 	int deficit;
+	int flow_index;
 	int active;		/* 1: flow is active (in a list) */
 	struct pie_status pst;	/* pie status variables */
 	struct l4s_si_extra *psi_extra;
@@ -120,7 +131,7 @@ struct l4s_schk {
  * sub-queues and the flows array pointer even after the scheduler instance
  * is destroyed.
  * Preserving these varaiables allows freeing the allocated memory by
- * fqpie_callout_cleanup() independently from l4s_free_sched().
+ * l4s_callout_cleanup() independently from l4s_free_sched().
  */
 struct l4s_si_extra {
 	uint32_t nr_active_q;	/* number of active queues */
@@ -150,10 +161,10 @@ struct dn_sch_l4s_parms
  l4s_sysctl = {{15000 * AQM_TIME_1US, 15000 * AQM_TIME_1US,
 	150000 * AQM_TIME_1US, PIE_SCALE * 0.1, PIE_SCALE * 0.125, 
 	PIE_SCALE * 1.25,	PIE_CAPDROP_ENABLED | PIE_DERAND_ENABLED},
-	1024, 10240, 1514};
+	6, 10240, 1514};
 
 static int
-fqpie_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
+l4s_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
@@ -178,7 +189,7 @@ fqpie_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
 }
 
 static int
-fqpie_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
+l4s_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
@@ -208,7 +219,7 @@ fqpie_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
 }
 
 static int
-fqpie_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
+l4s_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
@@ -225,52 +236,52 @@ fqpie_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-/* define FQ- PIE sysctl variables */
+/* define L4S sysctl variables */
 SYSBEGIN(f4)
 SYSCTL_DECL(_net_inet);
 SYSCTL_DECL(_net_inet_ip);
 SYSCTL_DECL(_net_inet_ip_dummynet);
-static SYSCTL_NODE(_net_inet_ip_dummynet, OID_AUTO, fqpie,
+static SYSCTL_NODE(_net_inet_ip_dummynet, OID_AUTO, l4s,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "L4S");
 
 #ifdef SYSCTL_NODE
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, target,
+SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, target,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_target_tupdate_maxb_handler, "L",
+    l4s_sysctl_target_tupdate_maxb_handler, "L",
     "queue target in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, tupdate,
+SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, tupdate,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_target_tupdate_maxb_handler, "L",
+    l4s_sysctl_target_tupdate_maxb_handler, "L",
     "the frequency of drop probability calculation in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, max_burst,
+SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, max_burst,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_target_tupdate_maxb_handler, "L",
+    l4s_sysctl_target_tupdate_maxb_handler, "L",
     "Burst allowance interval in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, max_ecnth,
+SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, max_ecnth,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_max_ecnth_handler, "L",
+    l4s_sysctl_max_ecnth_handler, "L",
     "ECN safeguard threshold scaled by 1000");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, alpha,
+SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, alpha,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_alpha_beta_handler, "L",
+    l4s_sysctl_alpha_beta_handler, "L",
     "PIE alpha scaled by 1000");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, beta,
+SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, beta,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_alpha_beta_handler, "L",
+    l4s_sysctl_alpha_beta_handler, "L",
     "beta scaled by 1000");
 
-SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, quantum,
+SYSCTL_UINT(_net_inet_ip_dummynet_l4s, OID_AUTO, quantum,
 	CTLFLAG_RW, &l4s_sysctl.quantum, 1514, "quantum for L4S");
-SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, flows,
-	CTLFLAG_RW, &l4s_sysctl.flows_cnt, 1024, "Number of queues for L4S");
-SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, limit,
+SYSCTL_UINT(_net_inet_ip_dummynet_l4s, OID_AUTO, flows,
+	CTLFLAG_RW, &l4s_sysctl.flows_cnt, 6, "Number of queues for L4S");
+SYSCTL_UINT(_net_inet_ip_dummynet_l4s, OID_AUTO, limit,
 	CTLFLAG_RW, &l4s_sysctl.limit, 10240, "limit for L4S");
 #endif
 
@@ -409,6 +420,7 @@ fq_calculate_drop_prob(void *x)
 	struct dn_aqm_pie_parms *pprms; 
 	int64_t p, prob, oldprob;
 	int p_isneg;
+	//printf("fq_calculate_drop_prob \n");
 
 	pprms = pst->parms;
 	prob = pst->drop_prob;
@@ -501,6 +513,20 @@ fq_calculate_drop_prob(void *x)
 
 	pst->drop_prob = prob;
 
+	//Storing Base probabbilities of each flow
+	if(q->flow_index==0)
+		drop_prob_Pc_flow_0=pst->drop_prob;
+	if(q->flow_index==1)
+		drop_prob_Pc_flow_1=pst->drop_prob;
+	if(q->flow_index==2)
+		drop_prob_Pc_flow_2=pst->drop_prob;
+	if(q->flow_index==3)
+		drop_prob_Pl_flow_3=pst->drop_prob;
+	if(q->flow_index==4)
+		drop_prob_Pl_flow_4=pst->drop_prob;
+	if(q->flow_index==5)
+		drop_prob_Pl_flow_5=pst->drop_prob;
+
 	/* store current delay value */
 	pst->qdelay_old = pst->current_qdelay;
 
@@ -511,6 +537,11 @@ fq_calculate_drop_prob(void *x)
 		else 
 			pst->burst_allowance = 0;
 	}
+	// printf("\nfq_calculate_drop_prob-start,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,end \n \n",q->flow_index,pprms->qdelay_ref,pprms->tupdate,
+	// pprms->max_burst,pprms->max_ecnth,pprms->alpha,pprms->beta,pprms->flags,
+	// pst->burst_allowance,pst->drop_prob,pst->current_qdelay,pst->qdelay_old,pst->accu_prob,
+	// pst->measurement_start,pst->avg_dq_time,pst->dq_count,pst->sflags,q->stats.tot_pkts,q->stats.tot_bytes,q->stats.length,
+	// q->stats.len_bytes,q->stats.drops);
 
 	if (pst->sflags & PIE_ACTIVE)
 	callout_reset_sbt(&pst->aqm_pie_callout,
@@ -566,7 +597,7 @@ fq_deactivate_pie(struct pie_status *pst)
   * Initialize PIE for sub-queue 'q'
   */
 static int
-pie_init(struct l4s_flow *q, struct l4s_schk *fqpie_schk)
+pie_init(struct l4s_flow *q, struct l4s_schk *l4s_schk)
 {
 	struct pie_status *pst=&q->pst;
 	struct dn_aqm_pie_parms *pprms = pst->parms;
@@ -580,8 +611,8 @@ pie_init(struct l4s_flow *q, struct l4s_schk *fqpie_schk)
 
 		/* For speed optimization, we caculate 1/3 queue size once here */
 		// XXX limit divided by number of queues divided by 3 ??? 
-		pst->one_third_q_size = (fqpie_schk->cfg.limit / 
-			fqpie_schk->cfg.flows_cnt) / 3;
+		pst->one_third_q_size = (l4s_schk->cfg.limit / 
+			l4s_schk->cfg.flows_cnt) / 3;
 
 		mtx_init(&pst->lock_mtx, "mtx_pie", NULL, MTX_DEF);
 		callout_init_mtx(&pst->aqm_pie_callout, &pst->lock_mtx,
@@ -597,7 +628,7 @@ pie_init(struct l4s_flow *q, struct l4s_schk *fqpie_schk)
  * 'x' is a l4s_flow to be destroyed
  */
 static void
-fqpie_callout_cleanup(void *x)
+l4s_callout_cleanup(void *x)
 {
 	struct l4s_flow *q = x;
 	struct pie_status *pst = &q->pst;
@@ -621,7 +652,7 @@ fqpie_callout_cleanup(void *x)
 
 /* 
  * Clean up PIE status for sub-queue 'q' 
- * Stop callout timer and destroy mtx using fqpie_callout_cleanup() callout.
+ * Stop callout timer and destroy mtx using l4s_callout_cleanup() callout.
  */
 static int
 pie_cleanup(struct l4s_flow *q)
@@ -630,7 +661,7 @@ pie_cleanup(struct l4s_flow *q)
 
 	mtx_lock(&pst->lock_mtx);
 	callout_reset_sbt(&pst->aqm_pie_callout,
-		SBT_1US, 0, fqpie_callout_cleanup, q, 0);
+		SBT_1US, 0, l4s_callout_cleanup, q, 0);
 	mtx_unlock(&pst->lock_mtx);
 	return 0;
 }
@@ -719,11 +750,54 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	struct pie_status *pst;
 	struct dn_aqm_pie_parms *pprms;
 	int t;
+	int coupling_factor=2;
 
 	len = m->m_pkthdr.len;
 	pst  = &q->pst;
 	pprms = pst->parms;
 	t = ENQUE;
+	int64_t prob;
+	uint32_t drop_prob_PCl_flow_3;
+	uint32_t drop_prob_PCl_flow_4;
+	uint32_t drop_prob_PCl_flow_5;
+
+	if(q->flow_index==0 || q->flow_index==1 || q->flow_index==2 )
+		prob=(pst->drop_prob*pst->drop_prob)/PIE_MAX_PROB;
+
+	if(q->flow_index==3)
+	{
+		drop_prob_PCl_flow_3=drop_prob_Pc_flow_0*coupling_factor;
+		if(drop_prob_Pl_flow_3<drop_prob_PCl_flow_3)
+			prob=drop_prob_PCl_flow_3;
+		else
+			prob=drop_prob_Pl_flow_3;
+	}
+		
+	if(q->flow_index==4)
+	{
+		drop_prob_PCl_flow_4=drop_prob_Pc_flow_1*coupling_factor;
+		if(drop_prob_Pl_flow_4<drop_prob_PCl_flow_4)
+			prob=drop_prob_PCl_flow_4;
+		else
+			prob=drop_prob_Pl_flow_4;
+	}
+	if(q->flow_index==5)
+	{
+		drop_prob_PCl_flow_5=drop_prob_Pc_flow_2*coupling_factor;
+		if(drop_prob_Pl_flow_5<drop_prob_PCl_flow_5)
+			prob=drop_prob_PCl_flow_5;
+		else
+			prob=drop_prob_Pl_flow_5;
+	}
+
+	if(prob < 0) 
+	{
+		prob = 0;
+	} 
+	else if(prob > PIE_MAX_PROB)
+	{
+		prob = PIE_MAX_PROB;
+	}
 
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
@@ -882,7 +956,7 @@ l4s_classify_flow(struct mbuf *m, uint16_t fcount, struct l4s_si *si)
 
 /*
  * Enqueue a packet into an appropriate queue according to
- * FQ-CoDe; algorithm.
+ * L4S; algorithm.
  */
 static int 
 l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q, 
@@ -894,6 +968,7 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	struct dn_queue *mainq;
 	struct l4s_flow *flows;
 	int idx, drop, i, maxidx;
+	int ecn_test_check=0;
 
 	mainq = (struct dn_queue *)(_si + 1);
 	si = (struct l4s_si *)_si;
@@ -902,7 +977,72 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	param = &schk->cfg;
 
 	 /* classify a packet to queue number*/
-	idx = l4s_classify_flow(m, param->flows_cnt, si);
+	idx = l4s_classify_flow(m, param->flows_cnt/2, si);
+	printf("L4S Is Packet ECN-Marked,%d \n",ecn_mark(m));	
+	
+	//printf("\nclassify done \n");
+
+	
+
+    /* Check if ECN is set in the IP header */
+    // if (ip_header->ip_tos & IPTOS_ECN_MASK) {
+    //     printf("ECN \n");
+    // } else {
+    //     printf("Non-ECN \n");
+    // }
+
+
+
+    struct ip *ip;
+	ip = (struct ip *)mtodo(m, dn_tag_get(m)->iphdr_off);
+	//uint16_t old;
+
+	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_NOTECT)
+		ecn_test_check=0;
+	if ((ip->ip_tos & IPTOS_ECN_MASK) != 0)
+		ecn_test_check=1;
+
+	// /*
+	// 	* ecn-capable but not marked,
+	// 	* mark CE and update checksum
+	// 	*/
+	// old = *(uint16_t *)ip;
+	// ip->ip_tos |= IPTOS_ECN_CE;
+	// ip->ip_sum = cksum_adjust(ip->ip_sum, old, *(uint16_t *)ip);
+	// printf("ecn-capable but not marked mark CE and update checksum \n");
+
+
+	if(ecn_test_check==1)
+	{
+		idx=idx+3;
+		//printf("\nalready marked , flow index: %d\n", idx);
+		
+	}
+		
+	else
+	{
+		//printf("\nNon-ECN, flow index: %d\n", idx);
+		;
+
+	}
+	
+
+
+
+
+
+
+
+	// if(ecn_mark(m))
+	// {
+	// 	idx=idx+3;
+	// 	printf("ECN \n");
+	// }
+	// else
+	// {
+	// 	printf("NON-ECN \n");
+	// }
+
 
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
@@ -947,7 +1087,7 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 
 /*
  * Dequeue a packet from an appropriate queue according to
- * FQ-CoDel algorithm.
+ * L4S algorithm.
  */
 static struct mbuf *
 l4s_dequeue(struct dn_sch_inst *_si)
@@ -1034,12 +1174,18 @@ l4s_dequeue(struct dn_sch_inst *_si)
 static int
 l4s_new_sched(struct dn_sch_inst *_si)
 {
+	printf("l4s_new_sched \n");
 	struct l4s_si *si;
 	struct dn_queue *q;
 	struct l4s_schk *schk;
 	struct l4s_flow *flows;
 	int i;
-
+	drop_prob_Pc_flow_0=0;
+	drop_prob_Pc_flow_1=0;
+	drop_prob_Pc_flow_2=0;
+	drop_prob_Pl_flow_3=0;
+	drop_prob_Pl_flow_4=0;
+	drop_prob_Pl_flow_5=0;
 	si = (struct l4s_si *)_si;
 	schk = (struct l4s_schk *)(_si->sched+1);
 
@@ -1175,7 +1321,7 @@ l4s_config(struct dn_schk *_schk)
 			fqp_cfg->limit = l4s_sysctl.limit;
 		else
 			fqp_cfg->limit = ep->par[8];
-		if (ep->par[9] < 0)
+		if (1)
 			fqp_cfg->flows_cnt = l4s_sysctl.flows_cnt;
 		else
 			fqp_cfg->flows_cnt = ep->par[9];
@@ -1237,7 +1383,7 @@ l4s_getconfig (struct dn_schk *_schk, struct dn_extra_parms *ep) {
  * data structures, and function pointers.
  */
 static struct dn_alg l4s_desc = {
-	_SI( .type = )  DN_SCHED_L4S,
+	_SI( .type = )  DN_SCHED_FQ_PIE,
 	_SI( .name = ) "L4S",
 	_SI( .flags = ) 0,
 
