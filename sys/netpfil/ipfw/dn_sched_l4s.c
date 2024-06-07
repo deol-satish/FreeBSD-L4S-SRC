@@ -1383,7 +1383,7 @@ l4s_getconfig (struct dn_schk *_schk, struct dn_extra_parms *ep) {
  * data structures, and function pointers.
  */
 static struct dn_alg l4s_desc = {
-	_SI( .type = )  DN_SCHED_FQ_L4S,
+	_SI( .type = )  DN_SCHED_L4S,
 	_SI( .name = ) "L4S",
 	_SI( .flags = ) 0,
 
