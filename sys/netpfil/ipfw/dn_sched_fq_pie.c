@@ -376,10 +376,10 @@ next:
         }
     }
 
-    printf("Checking if m->m_pkthdr.rcvif is not NULL\n");
+    printf("FQ-PIE Checking if m->m_pkthdr.rcvif is not NULL\n");
     if (m->m_pkthdr.rcvif != NULL &&
         __predict_false(m_rcvif_restore(m) == NULL)) {
-        printf("m_rcvif_restore returned NULL, freeing mbuf\n");
+        printf("FQ-PIE m_rcvif_restore returned NULL, freeing mbuf\n");
         m_freem(m);
         goto next;
     }

@@ -158,8 +158,11 @@ next:	m = q->mq.head;
 		*pkt_ts = *(aqm_time_t *)(mtag + 1);
 		m_tag_delete(m,mtag); 
 	}
+
+	printf("FQ-CoDel Checking if m->m_pkthdr.rcvif is not NULL\n");
 	if (m->m_pkthdr.rcvif != NULL &&
 	    __predict_false(m_rcvif_restore(m) == NULL)) {
+		printf("FQ-CoDel m_rcvif_restore returned NULL, freeing mbuf\n");
 		m_freem(m);
 		goto next;
 	}
