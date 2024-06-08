@@ -357,6 +357,7 @@ next:	m = q->mq.head;
 		m_freem(m);
 		goto next;
 	}
+	printf("PIE Returning mbuf\n");
 	return m;
 }
 
