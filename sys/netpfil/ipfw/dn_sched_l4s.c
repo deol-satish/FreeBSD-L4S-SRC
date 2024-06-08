@@ -997,8 +997,7 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	// {
 	// 	printf("CE Has been set to this packet \n");
 	// }
-	if (idx >2)
-		printf("Queue Number assigned to packet: %d \n",idx);
+	printf("Queue Number assigned to packet: %d \n",idx);
 
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
