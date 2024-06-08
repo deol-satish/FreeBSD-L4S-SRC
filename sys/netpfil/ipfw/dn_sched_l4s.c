@@ -982,25 +982,23 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	ip = (struct ip *)mtodo(m, dn_tag_get(m)->iphdr_off);
 	//uint16_t old;
 
-	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_NOTECT)
-	{
-		printf("ECN Incapable packet \n");
-	}
+	// if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_NOTECT)
+	// {
+	// 	printf("ECN Incapable packet \n");
+	// }
 	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_ECT1)
-	{
-		idx=idx+3;
-		printf("ECT(1) Has been set to this packet \n");
-	}
-	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_ECT0)
-	{
-		printf("ECT(0) Has been set to this packet \n");
-	}
-	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_CE)
-	{
-		printf("CE Has been set to this packet \n");
-	}
-	printf("Queue Number assigned to packet: %d \n",idx);
-	printf("------------------------------------------------------------------------ \n");
+		idx=idx+(int)(param->flows_cnt / 2);
+	//printf("ECT(1) Has been set to this packet \n");
+	// if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_ECT0)
+	// {
+	// 	printf("ECT(0) Has been set to this packet \n");
+	// }
+	// if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_CE)
+	// {
+	// 	printf("CE Has been set to this packet \n");
+	// }
+	if (idx >2)
+		printf("Queue Number assigned to packet: %d \n",idx);
 
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
