@@ -989,7 +989,6 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	}
 	printf("Queue Number assigned to packet",idx);
 
-
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
 	 * add timestamp to packet (no limit check)*/
