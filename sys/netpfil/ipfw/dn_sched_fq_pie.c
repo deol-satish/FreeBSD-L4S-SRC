@@ -347,8 +347,10 @@ __inline static struct mbuf *
 fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 	struct fq_pie_si *si, int getts)
 {
+	printf("Start fq_pie Extract head");
 	struct mbuf *m;
-	m = q->mq.head;
+
+next:	m = q->mq.head;
 	if (m == NULL)
 		return m;
 	q->mq.head = m->m_nextpkt;
@@ -370,6 +372,14 @@ fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 			m_tag_delete(m,mtag); 
 		}
 	}
+	printf("before if end fq_pie Extract head");
+	if (m->m_pkthdr.rcvif != NULL &&
+	    __predict_false(m_rcvif_restore(m) == NULL)) {
+		m_freem(m);
+		printf("insside if fq_pie Extract head");
+		goto next;
+	}
+	printf("final end fq_pie Extract head");
 	return m;
 }
 
