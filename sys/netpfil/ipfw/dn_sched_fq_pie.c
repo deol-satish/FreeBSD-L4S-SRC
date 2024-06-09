@@ -83,16 +83,6 @@
 /* list of queues */
 STAILQ_HEAD(fq_pie_list, fq_pie_flow);
 
-
-uint32_t drop_prob_Pc_flow_0;
-uint32_t drop_prob_Pc_flow_1;
-uint32_t drop_prob_Pc_flow_2;
-uint32_t drop_prob_Pl_flow_3;
-uint32_t drop_prob_Pl_flow_4;
-uint32_t drop_prob_Pl_flow_5;
-
-uint32_t P_Cmax;
-
 /* FQ_PIE parameters including PIE */
 struct dn_sch_fq_pie_parms {
 	struct dn_aqm_pie_parms	pcfg;	/* PIE configuration Parameters */
@@ -116,7 +106,6 @@ struct fq_pie_flow {
 	struct mq	mq;	/* list of packets */
 	struct flow_stats stats;	/* statistics */
 	int deficit;
-	int flow_index;
 	int active;		/* 1: flow is active (in a list) */
 	struct pie_status pst;	/* pie status variables */
 	struct fq_pie_si_extra *psi_extra;
@@ -163,7 +152,7 @@ struct dn_sch_fq_pie_parms
  fq_pie_sysctl = {{15000 * AQM_TIME_1US, 15000 * AQM_TIME_1US,
 	150000 * AQM_TIME_1US, PIE_SCALE * 0.1, PIE_SCALE * 0.125, 
 	PIE_SCALE * 1.25,	PIE_CAPDROP_ENABLED | PIE_DERAND_ENABLED},
-	6, 10240, 1514};
+	1024, 10240, 1514};
 
 static int
 fqpie_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
@@ -282,7 +271,7 @@ SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, beta,
 SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, quantum,
 	CTLFLAG_RW, &fq_pie_sysctl.quantum, 1514, "quantum for FQ_PIE");
 SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, flows,
-	CTLFLAG_RW, &fq_pie_sysctl.flows_cnt, 6, "Number of queues for FQ_PIE");
+	CTLFLAG_RW, &fq_pie_sysctl.flows_cnt, 1024, "Number of queues for FQ_PIE");
 SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, limit,
 	CTLFLAG_RW, &fq_pie_sysctl.limit, 10240, "limit for FQ_PIE");
 #endif
@@ -338,98 +327,46 @@ fq_update_stats(struct fq_pie_flow *q, struct fq_pie_si *si, int len,
 
 }
 
+/*
+ * Extract a packet from the head of sub-queue 'q'
+ * Return a packet or NULL if the queue is empty.
+ * If getts is set, also extract packet's timestamp from mtag.
+ */
 __inline static struct mbuf *
 fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
-    struct fq_pie_si *si, int getts)
+	struct fq_pie_si *si, int getts)
 {
-    printf("Start fq_pie_extract_head\n");
-    struct mbuf *m;
-    struct m_tag *mtag;
+	struct mbuf *m;
 
-next:
-    printf("Inside next label\n");
-    m = q->mq.head;
-    if (m == NULL) {
-        printf("Queue is empty\n");
-        return m;
-    }
-    q->mq.head = m->m_nextpkt;
+next:	m = q->mq.head;
+	if (m == NULL)
+		return m;
+	q->mq.head = m->m_nextpkt;
 
-    printf("Updating stats\n");
-    fq_update_stats(q, si, -m->m_pkthdr.len, 0);
+	fq_update_stats(q, si, -m->m_pkthdr.len, 0);
 
-    if (si->main_q.ni.length == 0) { /* queue is now idle */
-        printf("Queue is now idle\n");
-        si->main_q.q_time = V_dn_cfg.curr_time;
-    }
+	if (si->main_q.ni.length == 0) /* queue is now idle */
+			si->main_q.q_time = V_dn_cfg.curr_time;
 
-    if (getts) {
-        /* extract packet timestamp */
-        printf("Extracting packet timestamp\n");
-        mtag = m_tag_locate(m, MTAG_ABI_COMPAT, DN_AQM_MTAG_TS, NULL);
-        if (mtag == NULL) {
-            printf("PIE timestamp mtag not found!\n");
-            *pkt_ts = 0;
-        } else {
-            *pkt_ts = *(aqm_time_t *)(mtag + 1);
-            m_tag_delete(m, mtag); 
-        }
-    }
-
-    printf("FQ-PIE Checking if m->m_pkthdr.rcvif is not NULL\n");
-	if (m->m_pkthdr.rcvif != NULL){
-		printf("FQ-PIE Checking m->m_pkthdr.rcvif != NULL True\n");
+	if (getts) {
+		/* extract packet timestamp*/
+		struct m_tag *mtag;
+		mtag = m_tag_locate(m, MTAG_ABI_COMPAT, DN_AQM_MTAG_TS, NULL);
+		if (mtag == NULL){
+			D("PIE timestamp mtag not found!");
+			*pkt_ts = 0;
+		} else {
+			*pkt_ts = *(aqm_time_t *)(mtag + 1);
+			m_tag_delete(m,mtag); 
+		}
 	}
-	if (__predict_false(m_rcvif_restore(m) == NULL)){
-		printf("FQ-PIE __predict_false(m_rcvif_restore(m) == NULL True\n");
+	if (m->m_pkthdr.rcvif != NULL &&
+	    __predict_false(m_rcvif_restore(m) == NULL)) {
+		m_freem(m);
+		goto next;
 	}
-    if (m->m_pkthdr.rcvif != NULL &&
-        __predict_false(m_rcvif_restore(m) == NULL)) {
-        printf("FQ-PIE m_rcvif_restore returned NULL, freeing mbuf\n");
-        m_freem(m);
-        goto next;
-    }
-
-    printf("FQ-PIE Returning mbuf\n");
-    return m;
+	return m;
 }
-
-
-// __inline static struct mbuf *
-// fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
-// 	struct fq_pie_si *si, int getts)
-// {
-// 	struct mbuf *m;
-
-// next:	m = q->mq.head;
-// 	if (m == NULL)
-// 		return m;
-// 	q->mq.head = m->m_nextpkt;
-
-// 	fq_update_stats(q, si, -m->m_pkthdr.len, 0);
-
-// 	if (si->main_q.ni.length == 0) /* queue is now idle */
-// 			si->main_q.q_time = V_dn_cfg.curr_time;
-
-// 	if (getts) {
-// 		/* extract packet timestamp*/
-// 		struct m_tag *mtag;
-// 		mtag = m_tag_locate(m, MTAG_ABI_COMPAT, DN_AQM_MTAG_TS, NULL);
-// 		if (mtag == NULL){
-// 			D("PIE timestamp mtag not found!");
-// 			*pkt_ts = 0;
-// 		} else {
-// 			*pkt_ts = *(aqm_time_t *)(mtag + 1);
-// 			m_tag_delete(m,mtag); 
-// 		}
-// 	}
-// 	if (m->m_pkthdr.rcvif != NULL &&
-// 	    __predict_false(m_rcvif_restore(m) == NULL)) {
-// 		m_freem(m);
-// 		goto next;
-// 	}
-// 	return m;
-// }
 
 /*
  * Callout function for drop probability calculation 
@@ -444,7 +381,6 @@ fq_calculate_drop_prob(void *x)
 	struct dn_aqm_pie_parms *pprms; 
 	int64_t p, prob, oldprob;
 	int p_isneg;
-	//printf("fq_calculate_drop_prob \n");
 
 	pprms = pst->parms;
 	prob = pst->drop_prob;
@@ -537,20 +473,6 @@ fq_calculate_drop_prob(void *x)
 
 	pst->drop_prob = prob;
 
-	//Storing Base probabbilities of each flow
-	if(q->flow_index==0)
-		drop_prob_Pc_flow_0=pst->drop_prob;
-	if(q->flow_index==1)
-		drop_prob_Pc_flow_1=pst->drop_prob;
-	if(q->flow_index==2)
-		drop_prob_Pc_flow_2=pst->drop_prob;
-	if(q->flow_index==3)
-		drop_prob_Pl_flow_3=pst->drop_prob;
-	if(q->flow_index==4)
-		drop_prob_Pl_flow_4=pst->drop_prob;
-	if(q->flow_index==5)
-		drop_prob_Pl_flow_5=pst->drop_prob;
-
 	/* store current delay value */
 	pst->qdelay_old = pst->current_qdelay;
 
@@ -561,11 +483,6 @@ fq_calculate_drop_prob(void *x)
 		else 
 			pst->burst_allowance = 0;
 	}
-	// printf("\nfq_calculate_drop_prob-start,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,end \n \n",q->flow_index,pprms->qdelay_ref,pprms->tupdate,
-	// pprms->max_burst,pprms->max_ecnth,pprms->alpha,pprms->beta,pprms->flags,
-	// pst->burst_allowance,pst->drop_prob,pst->current_qdelay,pst->qdelay_old,pst->accu_prob,
-	// pst->measurement_start,pst->avg_dq_time,pst->dq_count,pst->sflags,q->stats.tot_pkts,q->stats.tot_bytes,q->stats.length,
-	// q->stats.len_bytes,q->stats.drops);
 
 	if (pst->sflags & PIE_ACTIVE)
 	callout_reset_sbt(&pst->aqm_pie_callout,
@@ -774,54 +691,11 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 	struct pie_status *pst;
 	struct dn_aqm_pie_parms *pprms;
 	int t;
-	int coupling_factor=2;
 
 	len = m->m_pkthdr.len;
 	pst  = &q->pst;
 	pprms = pst->parms;
 	t = ENQUE;
-	int64_t prob;
-	uint32_t drop_prob_PCl_flow_3;
-	uint32_t drop_prob_PCl_flow_4;
-	uint32_t drop_prob_PCl_flow_5;
-
-	if(q->flow_index==0 || q->flow_index==1 || q->flow_index==2 )
-		prob=(pst->drop_prob*pst->drop_prob)/PIE_MAX_PROB;
-
-	if(q->flow_index==3)
-	{
-		drop_prob_PCl_flow_3=drop_prob_Pc_flow_0*coupling_factor;
-		if(drop_prob_Pl_flow_3<drop_prob_PCl_flow_3)
-			prob=drop_prob_PCl_flow_3;
-		else
-			prob=drop_prob_Pl_flow_3;
-	}
-		
-	if(q->flow_index==4)
-	{
-		drop_prob_PCl_flow_4=drop_prob_Pc_flow_1*coupling_factor;
-		if(drop_prob_Pl_flow_4<drop_prob_PCl_flow_4)
-			prob=drop_prob_PCl_flow_4;
-		else
-			prob=drop_prob_Pl_flow_4;
-	}
-	if(q->flow_index==5)
-	{
-		drop_prob_PCl_flow_5=drop_prob_Pc_flow_2*coupling_factor;
-		if(drop_prob_Pl_flow_5<drop_prob_PCl_flow_5)
-			prob=drop_prob_PCl_flow_5;
-		else
-			prob=drop_prob_Pl_flow_5;
-	}
-
-	if(prob < 0) 
-	{
-		prob = 0;
-	} 
-	else if(prob > PIE_MAX_PROB)
-	{
-		prob = PIE_MAX_PROB;
-	}
 
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
@@ -992,7 +866,6 @@ fq_pie_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	struct dn_queue *mainq;
 	struct fq_pie_flow *flows;
 	int idx, drop, i, maxidx;
-	int ecn_test_check=0;
 
 	mainq = (struct dn_queue *)(_si + 1);
 	si = (struct fq_pie_si *)_si;
@@ -1001,72 +874,7 @@ fq_pie_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	param = &schk->cfg;
 
 	 /* classify a packet to queue number*/
-	idx = fq_pie_classify_flow(m, param->flows_cnt/2, si);
-	//printf("Is Packet ECN-Marked,%d \n",ecn_mark(m));	
-	
-	//printf("\nclassify done \n");
-
-	
-
-    /* Check if ECN is set in the IP header */
-    // if (ip_header->ip_tos & IPTOS_ECN_MASK) {
-    //     printf("ECN \n");
-    // } else {
-    //     printf("Non-ECN \n");
-    // }
-
-
-
-    struct ip *ip;
-	ip = (struct ip *)mtodo(m, dn_tag_get(m)->iphdr_off);
-	//uint16_t old;
-
-	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_NOTECT)
-		ecn_test_check=0;
-	if ((ip->ip_tos & IPTOS_ECN_MASK) != 0)
-		ecn_test_check=1;
-
-	// /*
-	// 	* ecn-capable but not marked,
-	// 	* mark CE and update checksum
-	// 	*/
-	// old = *(uint16_t *)ip;
-	// ip->ip_tos |= IPTOS_ECN_CE;
-	// ip->ip_sum = cksum_adjust(ip->ip_sum, old, *(uint16_t *)ip);
-	// printf("ecn-capable but not marked mark CE and update checksum \n");
-
-
-	if(ecn_test_check==1)
-	{
-		idx=idx+3;
-		//printf("\nalready marked , flow index: %d\n", idx);
-		
-	}
-		
-	else
-	{
-		//printf("\nNon-ECN, flow index: %d\n", idx);
-		;
-
-	}
-	
-
-
-
-
-
-
-
-	// if(ecn_mark(m))
-	// {
-	// 	idx=idx+3;
-	// 	printf("ECN \n");
-	// }
-	// else
-	// {
-	// 	printf("NON-ECN \n");
-	// }
-
+	idx = fq_pie_classify_flow(m, param->flows_cnt, si);
 
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
@@ -1203,12 +1011,7 @@ fq_pie_new_sched(struct dn_sch_inst *_si)
 	struct fq_pie_schk *schk;
 	struct fq_pie_flow *flows;
 	int i;
-	drop_prob_Pc_flow_0=0;
-	drop_prob_Pc_flow_1=0;
-	drop_prob_Pc_flow_2=0;
-	drop_prob_Pl_flow_3=0;
-	drop_prob_Pl_flow_4=0;
-	drop_prob_Pl_flow_5=0;
+
 	si = (struct fq_pie_si *)_si;
 	schk = (struct fq_pie_schk *)(_si->sched+1);
 
@@ -1344,7 +1147,7 @@ fq_pie_config(struct dn_schk *_schk)
 			fqp_cfg->limit = fq_pie_sysctl.limit;
 		else
 			fqp_cfg->limit = ep->par[8];
-		if (1)
+		if (ep->par[9] < 0)
 			fqp_cfg->flows_cnt = fq_pie_sysctl.flows_cnt;
 		else
 			fqp_cfg->flows_cnt = ep->par[9];
