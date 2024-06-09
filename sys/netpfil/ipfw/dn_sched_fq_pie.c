@@ -383,12 +383,11 @@ next:
 	if (__predict_false(m_rcvif_restore(m) == NULL)){
 		printf("FQ-PIE __predict_false(m_rcvif_restore(m) == NULL True\n");
 	}
-    if (m->m_pkthdr.rcvif != NULL &&
-        __predict_false(m_rcvif_restore(m) == NULL)) {
-        printf("FQ-PIE m_rcvif_restore returned NULL, freeing mbuf\n");
-        m_freem(m);
-        goto next;
-    }
+	if (m->m_pkthdr.rcvif != NULL &&
+	    __predict_false(m_rcvif_restore(m) == NULL)) {
+		m_freem(m);
+		goto next;
+	}
 
     printf("FQ-PIE Returning mbuf\n");
     return m;
