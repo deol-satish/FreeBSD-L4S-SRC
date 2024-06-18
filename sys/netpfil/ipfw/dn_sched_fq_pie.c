@@ -1036,7 +1036,7 @@ fq_pie_dequeue(struct dn_sch_inst *_si)
 static int
 fq_pie_new_sched(struct dn_sch_inst *_si)
 {
-	printf("fq_pie_new_sched \n");
+	// printf("fq_pie_new_sched \n");
 	struct fq_pie_si *si;
 	struct dn_queue *q;
 	struct fq_pie_schk *schk;
