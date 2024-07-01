@@ -429,4 +429,6 @@ MIASM =  \
 	membarrier.o \
 	timerfd_create.o \
 	timerfd_gettime.o \
-	timerfd_settime.o
+	timerfd_settime.o \
+	drl_update_prob.o \
+	drl_get_buffer.o

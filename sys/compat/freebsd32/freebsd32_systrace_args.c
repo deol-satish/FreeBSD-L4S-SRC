@@ -3371,6 +3371,21 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 4;
 		break;
 	}
+	/* drl_update_prob */
+	case 588: {
+		struct drl_update_prob_args *p = params;
+		uarg[a++] = p->prob; /* u_int */
+		*n_args = 1;
+		break;
+	}
+	/* freebsd32_drl_get_buffer */
+	case 589: {
+		struct freebsd32_drl_get_buffer_args *p = params;
+		uarg[a++] = (intptr_t)p->data; /* uint32_t * */
+		iarg[a++] = p->size; /* int */
+		*n_args = 2;
+		break;
+	}
 	default:
 		*n_args = 0;
 		break;
@@ -9101,6 +9116,29 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* drl_update_prob */
+	case 588:
+		switch (ndx) {
+		case 0:
+			p = "u_int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* freebsd32_drl_get_buffer */
+	case 589:
+		switch (ndx) {
+		case 0:
+			p = "userland uint32_t *";
+			break;
+		case 1:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
 	default:
 		break;
 	};
@@ -10986,6 +11024,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* freebsd32_timerfd_settime */
 	case 587:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* drl_update_prob */
+	case 588:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* freebsd32_drl_get_buffer */
+	case 589:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
