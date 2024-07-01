@@ -3333,5 +3333,15 @@
 		    uintptr_t idx2
 		);
 	}
-
+589	AUE_NULL	STD {
+		int drl_update_prob(
+			_In_ u_int prob
+		);
+	}
+590	AUE_NULL	STD {
+		int drl_get_buffer(
+			_Out_ void **data,
+			_Out_ int size
+		);
+	}
 ; vim: syntax=off
