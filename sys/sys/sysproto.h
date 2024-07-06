@@ -1876,6 +1876,13 @@ struct timerfd_settime_args {
 	char new_value_l_[PADL_(const struct itimerspec *)]; const struct itimerspec * new_value; char new_value_r_[PADR_(const struct itimerspec *)];
 	char old_value_l_[PADL_(struct itimerspec *)]; struct itimerspec * old_value; char old_value_r_[PADR_(struct itimerspec *)];
 };
+struct drl_update_prob_args {
+	char prob_l_[PADL_(int)]; int prob; char prob_r_[PADR_(int)];
+};
+struct drl_get_buffer_args {
+	char data_l_[PADL_(void *)]; void * data; char data_r_[PADR_(void *)];
+	char size_l_[PADL_(int *)]; int * size; char size_r_[PADR_(int *)];
+};
 int	sys_exit(struct thread *, struct exit_args *);
 int	sys_fork(struct thread *, struct fork_args *);
 int	sys_read(struct thread *, struct read_args *);
@@ -2276,6 +2283,8 @@ int	sys_membarrier(struct thread *, struct membarrier_args *);
 int	sys_timerfd_create(struct thread *, struct timerfd_create_args *);
 int	sys_timerfd_gettime(struct thread *, struct timerfd_gettime_args *);
 int	sys_timerfd_settime(struct thread *, struct timerfd_settime_args *);
+int	sys_drl_update_prob(struct thread *, struct drl_update_prob_args *);
+int	sys_drl_get_buffer(struct thread *, struct drl_get_buffer_args *);
 
 #ifdef COMPAT_43
 
@@ -3250,6 +3259,8 @@ int	freebsd13_swapoff(struct thread *, struct freebsd13_swapoff_args *);
 #define	SYS_AUE_timerfd_create	AUE_TIMERFD
 #define	SYS_AUE_timerfd_gettime	AUE_TIMERFD
 #define	SYS_AUE_timerfd_settime	AUE_TIMERFD
+#define	SYS_AUE_drl_update_prob	AUE_NULL
+#define	SYS_AUE_drl_get_buffer	AUE_NULL
 
 #undef PAD_
 #undef PADL_

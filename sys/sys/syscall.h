@@ -524,4 +524,6 @@
 #define	SYS_timerfd_create	585
 #define	SYS_timerfd_gettime	586
 #define	SYS_timerfd_settime	587
-#define	SYS_MAXSYSCALL	588
+#define	SYS_drl_update_prob	588
+#define	SYS_drl_get_buffer	589
+#define	SYS_MAXSYSCALL	590

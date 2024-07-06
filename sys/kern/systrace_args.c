@@ -3458,6 +3458,21 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 4;
 		break;
 	}
+	/* drl_update_prob */
+	case 588: {
+		struct drl_update_prob_args *p = params;
+		iarg[a++] = p->prob; /* int */
+		*n_args = 1;
+		break;
+	}
+	/* drl_get_buffer */
+	case 589: {
+		struct drl_get_buffer_args *p = params;
+		uarg[a++] = (intptr_t)p->data; /* void * */
+		uarg[a++] = (intptr_t)p->size; /* int * */
+		*n_args = 2;
+		break;
+	}
 	default:
 		*n_args = 0;
 		break;
@@ -9246,6 +9261,29 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* drl_update_prob */
+	case 588:
+		switch (ndx) {
+		case 0:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* drl_get_buffer */
+	case 589:
+		switch (ndx) {
+		case 0:
+			p = "userland void *";
+			break;
+		case 1:
+			p = "userland int *";
+			break;
+		default:
+			break;
+		};
+		break;
 	default:
 		break;
 	};
@@ -11221,6 +11259,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* timerfd_settime */
 	case 587:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* drl_update_prob */
+	case 588:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* drl_get_buffer */
+	case 589:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

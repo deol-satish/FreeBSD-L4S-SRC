@@ -506,4 +506,6 @@
 #define	FREEBSD32_SYS_timerfd_create	585
 #define	FREEBSD32_SYS_freebsd32_timerfd_gettime	586
 #define	FREEBSD32_SYS_freebsd32_timerfd_settime	587
-#define	FREEBSD32_SYS_MAXSYSCALL	588
+#define	FREEBSD32_SYS_drl_update_prob	588
+#define	FREEBSD32_SYS_drl_get_buffer	589
+#define	FREEBSD32_SYS_MAXSYSCALL	590

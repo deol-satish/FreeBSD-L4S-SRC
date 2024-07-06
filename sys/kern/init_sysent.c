@@ -648,4 +648,6 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(timerfd_create_args), .sy_call = (sy_call_t *)sys_timerfd_create, .sy_auevent = AUE_TIMERFD, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 585 = timerfd_create */
 	{ .sy_narg = AS(timerfd_gettime_args), .sy_call = (sy_call_t *)sys_timerfd_gettime, .sy_auevent = AUE_TIMERFD, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 586 = timerfd_gettime */
 	{ .sy_narg = AS(timerfd_settime_args), .sy_call = (sy_call_t *)sys_timerfd_settime, .sy_auevent = AUE_TIMERFD, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 587 = timerfd_settime */
+	{ .sy_narg = AS(drl_update_prob_args), .sy_call = (sy_call_t *)sys_drl_update_prob, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 588 = drl_update_prob */
+	{ .sy_narg = AS(drl_get_buffer_args), .sy_call = (sy_call_t *)sys_drl_get_buffer, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 589 = drl_get_buffer */
 };
