@@ -807,7 +807,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 			 * if drop_prob over ECN threshold, drop the packet 
 			 * otherwise mark and enqueue it.
 			 */
-			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
+			if (pprms->flags & PIE_ECN_ENABLED && prob < 
 				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
 				&& ecn_mark(m))
 				t = ENQUE;
@@ -822,7 +822,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	}
 
 	/*  reset burst tolerance and optinally turn PIE off*/
-	if (pst->drop_prob == 0 && pst->current_qdelay < (pprms->qdelay_ref >> 1)
+	if (prob == 0 && pst->current_qdelay < (pprms->qdelay_ref >> 1)
 		&& pst->qdelay_old < (pprms->qdelay_ref >> 1)) {
 			
 			pst->burst_allowance = pprms->max_burst;
