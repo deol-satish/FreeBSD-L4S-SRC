@@ -78,6 +78,7 @@
 
 #define DN_SCHED_L4S 8
 
+
 /* list of queues */
 STAILQ_HEAD(l4s_list, l4s_flow);
 
@@ -1171,6 +1172,7 @@ l4s_new_sched(struct dn_sch_inst *_si)
 	for (i = 0; i < schk->cfg.flows_cnt; i++) {
 		flows[i].pst.parms = &schk->cfg.pcfg;
 		flows[i].psi_extra = si->si_extra;
+		flows[i].flow_index=i;
 		pie_init(&flows[i], schk);
 	}
 
