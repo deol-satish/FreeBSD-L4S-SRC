@@ -433,6 +433,7 @@ fq_codel_dequeue(struct dn_sch_inst *_si)
 static int
 fq_codel_new_sched(struct dn_sch_inst *_si)
 {
+	printf("FQ-CoDel Active\n");
 	struct fq_codel_si *si;
 	struct dn_queue *q;
 	struct fq_codel_schk *schk;
