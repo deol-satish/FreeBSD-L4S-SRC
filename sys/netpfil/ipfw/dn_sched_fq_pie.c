@@ -338,7 +338,7 @@ fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 {
 	struct mbuf *m;
 
-	m = q->mq.head;
+next:	m = q->mq.head;
 	if (m == NULL)
 		return m;
 	q->mq.head = m->m_nextpkt;
@@ -360,10 +360,20 @@ fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 			m_tag_delete(m,mtag); 
 		}
 	}
-	if (m->m_pkthdr.rcvif != NULL &&
-	    __predict_false(m_rcvif_restore(m) == NULL)) {
-		m_freem(m);
+	if (m->m_pkthdr.rcvif != NULL) {
+		printf("rcvif is not NULL\n");
+
+		if (__predict_false(m_rcvif_restore(m) == NULL)) {
+			printf("m_rcvif_restore returned NULL, freeing m\n");
+			m_freem(m);
+			goto next;
+		} else {
+			printf("m_rcvif_restore succeeded\n");
+		}
+	} else {
+		printf("rcvif is NULL\n");
 	}
+
 	return m;
 }
 
