@@ -710,7 +710,7 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 		*/
 		if (pprms->flags & PIE_ECN_ENABLED) {
 			printf("ECN is enabled.\n");
-			printf("Drop probability: %f\n", pst->drop_prob);
+			printf("Drop probability: %u\n", pst->drop_prob);
 			printf("Max ECN threshold: %d\n", pprms->max_ecnth);
 			printf("PIE_PROB_BITS: %d\n", PIE_PROB_BITS);
 			printf("PIE_FIX_POINT_BITS: %d\n", PIE_FIX_POINT_BITS);
