@@ -507,19 +507,46 @@ aqm_pie_enqueue(struct dn_queue *q, struct mbuf* m)
 	if (qlen >= f->qsize)
 		t = DROP;
 	/* drop/mark the packet when PIE is active and burst time elapsed */
-	else if ((pst->sflags & PIE_ACTIVE) && pst->burst_allowance==0
+	else if ((pst->sflags & PIE_ACTIVE) && pst->burst_allowance == 0
 			&& drop_early(pst, q->ni.len_bytes) == DROP) {
-				/* 
-				 * if drop_prob over ECN threshold, drop the packet 
-				 * otherwise mark and enqueue it.
-				 */
-				if ((pprms->flags & PIE_ECN_ENABLED) && pst->drop_prob <
-					(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
-					&& ecn_mark(m))
-					t = ENQUE;
-				else
-					t = DROP;
+		
+		printf("PIE_ACTIVE is set. Burst allowance is 0.\n");
+		printf("Packet length in bytes: %d\n", q->ni.len_bytes);
+		
+		/* 
+		* if drop_prob over ECN threshold, drop the packet 
+		* otherwise mark and enqueue it.
+		*/
+		if ((pprms->flags & PIE_ECN_ENABLED)) {
+			printf("ECN is enabled.\n");
+			printf("Drop probability: %u\n", pst->drop_prob); // Assuming drop_prob is uint32_t
+			printf("Max ECN threshold: %u\n", pprms->max_ecnth); // Assuming max_ecnth is also uint32_t
+			printf("PIE_PROB_BITS: %d\n", PIE_PROB_BITS);
+			printf("PIE_FIX_POINT_BITS: %d\n", PIE_FIX_POINT_BITS);
+
+			// Calculate the ECN threshold
+			uint32_t ecn_threshold = pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS);
+			printf("Calculated ECN threshold: %u\n", ecn_threshold);
+
+			// Check if drop_prob is less than the calculated threshold and if ecn_mark is successful
+			int ecn_mark_result = ecn_mark(m);
+			printf("Result of ecn_mark(m): %d\n", ecn_mark_result);
+			printf("Condition (drop_prob < ecn_threshold): %s\n", 
+				(pst->drop_prob < ecn_threshold) ? "TRUE" : "FALSE");
+
+			if (pst->drop_prob < ecn_threshold && ecn_mark_result) {
+				t = ENQUE;
+				printf("Packet marked for enqueue.\n");
+			} else {
+				t = DROP;
+				printf("Packet dropped.\n");
+			}
+		} else {
+			t = DROP;
+			printf("ECN is not enabled. Packet dropped.\n");
+		}
 	}
+
 
 	/* Turn PIE on when 1/3 of the queue is full */ 
 	if (!(pst->sflags & PIE_ACTIVE) && qlen >= pst->one_third_q_size) {

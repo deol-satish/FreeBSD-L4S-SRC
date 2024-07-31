@@ -360,20 +360,11 @@ next:	m = q->mq.head;
 			m_tag_delete(m,mtag); 
 		}
 	}
-	if (m->m_pkthdr.rcvif != NULL) {
-		printf("rcvif is not NULL\n");
-
-		if (__predict_false(m_rcvif_restore(m) == NULL)) {
-			printf("m_rcvif_restore returned NULL, freeing m\n");
-			m_freem(m);
-			goto next;
-		} else {
-			printf("m_rcvif_restore succeeded\n");
-		}
-	} else {
-		printf("rcvif is NULL\n");
+	if (m->m_pkthdr.rcvif != NULL &&
+	    __predict_false(m_rcvif_restore(m) == NULL)) {
+		m_freem(m);
+		goto next;
 	}
-
 	return m;
 }
 
@@ -709,45 +700,17 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
 		&& drop_early(pst, q->stats.len_bytes) == DROP) {
-			
-		printf("PIE_ACTIVE is set. Burst allowance is 0.\n");
-		printf("Packet length in bytes: %d\n", q->stats.len_bytes);
-
-		/* 
-		* if drop_prob over ECN threshold, drop the packet 
-		* otherwise mark and enqueue it.
-		*/
-		if (pprms->flags & PIE_ECN_ENABLED) {
-			printf("ECN is enabled.\n");
-			printf("Drop probability: %u\n", pst->drop_prob);
-			printf("Max ECN threshold: %d\n", pprms->max_ecnth);
-			printf("PIE_PROB_BITS: %d\n", PIE_PROB_BITS);
-			printf("PIE_FIX_POINT_BITS: %d\n", PIE_FIX_POINT_BITS);
-
-			// Calculate the ECN threshold
-			int ecn_threshold = pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS);
-			printf("Calculated ECN threshold: %d\n", ecn_threshold);
-
-			// Check the conditions
-			int ecn_mark_result = ecn_mark(m);
-			printf("Result of ecn_mark(m): %d\n", ecn_mark_result);
-			printf("Condition (drop_prob < ecn_threshold && ecn_mark(m)): %s\n", 
-				(pst->drop_prob < ecn_threshold && ecn_mark_result) ? "TRUE" : "FALSE");
-
-			if (pst->drop_prob < ecn_threshold && ecn_mark_result) {
+			/* 
+			 * if drop_prob over ECN threshold, drop the packet 
+			 * otherwise mark and enqueue it.
+			 */
+			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
+				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
+				&& ecn_mark(m))
 				t = ENQUE;
-				printf("Packet marked for enqueue.\n");
-			} else {
+			else
 				t = DROP;
-				printf("Packet dropped.\n");
-			}
-		} else {
-			t = DROP;
-			printf("ECN is not enabled. Packet dropped.\n");
 		}
-	}
-
-
 
 	/* Turn PIE on when 1/3 of the queue is full */ 
 	if (!(pst->sflags & PIE_ACTIVE) && q->stats.len_bytes >= 
