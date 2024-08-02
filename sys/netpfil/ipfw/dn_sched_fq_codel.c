@@ -484,6 +484,7 @@ fq_codel_new_sched(struct dn_sch_inst *_si)
 static int
 fq_codel_free_sched(struct dn_sch_inst *_si)
 {
+	printf("FQ-CoDel Free Sched\n");
 	struct fq_codel_si *si = (struct fq_codel_si *)_si ;
 
 	/* free the flows array */
