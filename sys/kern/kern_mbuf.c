@@ -1631,32 +1631,57 @@ m_rcvif_serialize(struct mbuf *m)
 	m->m_pkthdr.leaf_rcvgen = gen;
 }
 
-struct ifnet *
-m_rcvif_restore(struct mbuf *m)
+struct ifnet *m_rcvif_restore(struct mbuf *m)
 {
-	struct ifnet *ifp, *leaf_ifp;
+    struct ifnet *ifp, *leaf_ifp;
 
-	M_ASSERTPKTHDR(m);
-	NET_EPOCH_ASSERT();
+    M_ASSERTPKTHDR(m);
+    NET_EPOCH_ASSERT();
 
-	ifp = ifnet_byindexgen(m->m_pkthdr.rcvidx, m->m_pkthdr.rcvgen);
-	if (ifp == NULL || (if_getflags(ifp) & IFF_DYING))
-		return (NULL);
+    // Print packet header info
+    printf("Debug: m->m_pkthdr.rcvidx = %d\n", m->m_pkthdr.rcvidx);
+    printf("Debug: m->m_pkthdr.rcvgen = %d\n", m->m_pkthdr.rcvgen);
+    printf("Debug: m->m_pkthdr.leaf_rcvidx = %d\n", m->m_pkthdr.leaf_rcvidx);
+    printf("Debug: m->m_pkthdr.leaf_rcvgen = %d\n", m->m_pkthdr.leaf_rcvgen);
 
-	if (__predict_true(m->m_pkthdr.leaf_rcvidx == (u_short)-1)) {
-		leaf_ifp = NULL;
-	} else {
-		leaf_ifp = ifnet_byindexgen(m->m_pkthdr.leaf_rcvidx,
-		    m->m_pkthdr.leaf_rcvgen);
-		if (__predict_false(leaf_ifp != NULL && (if_getflags(leaf_ifp) & IFF_DYING)))
-			leaf_ifp = NULL;
-	}
+    // Retrieve the main interface
+    ifp = ifnet_byindexgen(m->m_pkthdr.rcvidx, m->m_pkthdr.rcvgen);
+    
+    // Print the result of the main interface lookup
+    printf("Debug: ifp = ifnet_byindexgen(%d, %d) returned %p\n", 
+           m->m_pkthdr.rcvidx, m->m_pkthdr.rcvgen, ifp);
 
-	m->m_pkthdr.leaf_rcvif = leaf_ifp;
-	m->m_pkthdr.rcvif = ifp;
+    if (ifp == NULL || (if_getflags(ifp) & IFF_DYING))
+        return (NULL);
 
-	return (ifp);
+    // Handle leaf interface
+    if (__predict_true(m->m_pkthdr.leaf_rcvidx == (u_short)-1)) {
+        leaf_ifp = NULL;
+    } else {
+        leaf_ifp = ifnet_byindexgen(m->m_pkthdr.leaf_rcvidx, m->m_pkthdr.leaf_rcvgen);
+        
+        // Print the result of the leaf interface lookup
+        printf("Debug: leaf_ifp = ifnet_byindexgen(%d, %d) returned %p\n", 
+               m->m_pkthdr.leaf_rcvidx, m->m_pkthdr.leaf_rcvgen, leaf_ifp);
+
+        if (__predict_false(leaf_ifp != NULL && (if_getflags(leaf_ifp) & IFF_DYING)))
+            leaf_ifp = NULL;
+    }
+
+    // Print final result of leaf interface
+    printf("Debug: leaf_ifp after checking flags = %p\n", leaf_ifp);
+
+    // Update packet header
+    m->m_pkthdr.leaf_rcvif = leaf_ifp;
+    m->m_pkthdr.rcvif = ifp;
+
+    // Print updated packet header info
+    printf("Debug: m->m_pkthdr.leaf_rcvif = %p\n", m->m_pkthdr.leaf_rcvif);
+    printf("Debug: m->m_pkthdr.rcvif = %p\n", m->m_pkthdr.rcvif);
+
+    return (ifp);
 }
+
 
 /*
  * Allocate an mbuf with anonymous external pages.
