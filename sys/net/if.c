@@ -404,6 +404,7 @@ ifnet_byindexgen(uint16_t idx, uint16_t gen)
 
 	if (__predict_false(idx > if_index))
 	{
+		printf("if_index %d\n",if_index)
 		printf("idx > if_index if.c \n");
 		return (NULL);
 	}
