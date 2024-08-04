@@ -374,7 +374,7 @@ next:	m = q->mq.head;
 			printf("Debug: m has been freed, jumping to 'next'\n");
 			goto next;
 		}
-	} else {
+		} else {
 		printf("Debug: m->m_pkthdr.rcvif is NULL\n");
 	}
 
@@ -700,6 +700,7 @@ pie_dequeue(struct fq_pie_flow *q, struct fq_pie_si *si)
 static int
 pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 {
+	printf("PIE Enqueue\n");
 	uint64_t len;
 	struct pie_status *pst;
 	struct dn_aqm_pie_parms *pprms;
@@ -774,6 +775,7 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 static void
 pie_drop_head(struct fq_pie_flow *q, struct fq_pie_si *si)
 {
+	printf("Start pie_drop_head\n"); 
 	struct mbuf *m = q->mq.head;
 
 	if (m == NULL)
@@ -786,6 +788,7 @@ pie_drop_head(struct fq_pie_flow *q, struct fq_pie_si *si)
 			si->main_q.q_time = V_dn_cfg.curr_time;
 	/* reset accu_prob after packet drop */
 	q->pst.accu_prob = 0;
+	printf("END pie_drop_head\n"); 
 
 	FREE_PKT(m);
 }
@@ -872,7 +875,8 @@ fq_pie_classify_flow(struct mbuf *m, uint16_t fcount, struct fq_pie_si *si)
 static int 
 fq_pie_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q, 
 	struct mbuf *m)
-{ 
+{
+	printf("FQ-PIE START Enqueue\n"); 
 	struct fq_pie_si *si;
 	struct fq_pie_schk *schk;
 	struct dn_sch_fq_pie_parms *param;
@@ -926,6 +930,7 @@ fq_pie_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 			drop = 1;
 		}
 	}
+	printf("FQ-PIE END Enqueue\n"); 
 
 	return drop;
 }
@@ -936,7 +941,8 @@ fq_pie_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
  */
 static struct mbuf *
 fq_pie_dequeue(struct dn_sch_inst *_si)
-{ 
+{
+	printf("FQ-PIE Start Denqueue\n");  
 	struct fq_pie_si *si;
 	struct fq_pie_schk *schk;
 	struct dn_sch_fq_pie_parms *param;
@@ -1004,6 +1010,7 @@ fq_pie_dequeue(struct dn_sch_inst *_si)
 		/* we have a packet to return, 
 		 * update flow deficit and return the packet*/
 		f->deficit -= mbuf->m_pkthdr.len;
+		printf("FQ-PIE END Denqueue\n"); 
 		return mbuf;
 
 	} while (1);
@@ -1019,6 +1026,7 @@ fq_pie_dequeue(struct dn_sch_inst *_si)
 static int
 fq_pie_new_sched(struct dn_sch_inst *_si)
 {
+	printf("FQ-PIE New Sched\n");
 	struct fq_pie_si *si;
 	struct dn_queue *q;
 	struct fq_pie_schk *schk;
@@ -1075,6 +1083,7 @@ fq_pie_new_sched(struct dn_sch_inst *_si)
 	dummynet_sched_lock();
 	fq_pie_desc.ref_count++;
 	dummynet_sched_unlock();
+	
 
 	return 0;
 }
@@ -1085,6 +1094,7 @@ fq_pie_new_sched(struct dn_sch_inst *_si)
 static int
 fq_pie_free_sched(struct dn_sch_inst *_si)
 {
+	printf("FQ-PIE Free Sched\n");
 	struct fq_pie_si *si;
 	struct fq_pie_schk *schk;
 	struct fq_pie_flow *flows;
