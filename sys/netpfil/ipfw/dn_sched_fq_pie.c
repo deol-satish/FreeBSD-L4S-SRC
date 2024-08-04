@@ -364,15 +364,18 @@ next:	m = q->mq.head;
 	if (m->m_pkthdr.rcvif != NULL) {
 		printf("Debug: m->m_pkthdr.rcvif is not NULL\n");
 		
-		// Call m_rcvif_restore and check its return value
+		// Attempt to restore packet interface information
 		void *rcvif_restore_result = m_rcvif_restore(m);
 		printf("Debug: m_rcvif_restore(m) returned %p\n", rcvif_restore_result);
 		
+		// Check if restoration failed
 		if (__predict_false(rcvif_restore_result == NULL)) {
-			printf("Debug: m_rcvif_restore(m) returned NULL, freeing m\n");
+			printf("Debug: m_rcvif_restore(m) returned NULL, indicating a problem with restoring the packet interface\n");
 			m_freem(m);
-			printf("Debug: m has been freed, jumping to 'next'\n");
+			printf("Debug: Packet has been freed\n");
 			goto next;
+		} else {
+			printf("Debug: Packet interface restoration succeeded\n");
 		}
 		} else {
 		printf("Debug: m->m_pkthdr.rcvif is NULL\n");
