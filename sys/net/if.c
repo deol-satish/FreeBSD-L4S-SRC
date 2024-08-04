@@ -408,9 +408,16 @@ ifnet_byindexgen(uint16_t idx, uint16_t gen)
 	ifp = ck_pr_load_ptr(&ifindex_table[idx].ife_ifnet);
 
 	if (ifindex_table[idx].ife_gencnt == gen)
+	{
+		printf("Went into Non-Null if.c");
 		return (ifp);
+	}
 	else
+	{
+		printf("Went into Null if.c");
 		return (NULL);
+	}
+		
 }
 
 /*
