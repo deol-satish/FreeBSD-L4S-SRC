@@ -158,11 +158,26 @@ next:	m = q->mq.head;
 		*pkt_ts = *(aqm_time_t *)(mtag + 1);
 		m_tag_delete(m,mtag); 
 	}
-	if (m->m_pkthdr.rcvif != NULL &&
-	    __predict_false(m_rcvif_restore(m) == NULL)) {
-		m_freem(m);
-		goto next;
+	if (m->m_pkthdr.rcvif != NULL) {
+		printf("Debug: m->m_pkthdr.rcvif is not NULL\n");
+		
+		// Attempt to restore packet interface information
+		void *rcvif_restore_result = m_rcvif_restore(m);
+		printf("Debug: m_rcvif_restore(m) returned %p\n", rcvif_restore_result);
+		
+		// Check if restoration failed
+		if (__predict_false(rcvif_restore_result == NULL)) {
+			printf("Debug: m_rcvif_restore(m) returned NULL, indicating a problem with restoring the packet interface\n");
+			m_freem(m);
+			printf("Debug: Packet has been freed\n");
+			goto next;
+		} else {
+			printf("Debug: Packet interface restoration succeeded\n");
+		}
+		} else {
+		printf("Debug: m->m_pkthdr.rcvif is NULL\n");
 	}
+
 	return m;
 }
 
