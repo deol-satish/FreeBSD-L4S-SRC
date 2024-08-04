@@ -403,18 +403,22 @@ ifnet_byindexgen(uint16_t idx, uint16_t gen)
 	NET_EPOCH_ASSERT();
 
 	if (__predict_false(idx > if_index))
+	{
+		printf("idx > if_index if.c \n");
 		return (NULL);
+	}
+		
 
 	ifp = ck_pr_load_ptr(&ifindex_table[idx].ife_ifnet);
 
 	if (ifindex_table[idx].ife_gencnt == gen)
 	{
-		printf("Went into Non-Null if.c");
+		printf("Went into Non-Null if.c \n");
 		return (ifp);
 	}
 	else
 	{
-		printf("Went into Null if.c");
+		printf("Went into Null if.c \n");
 		return (NULL);
 	}
 		
