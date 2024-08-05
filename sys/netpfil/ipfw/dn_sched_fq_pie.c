@@ -337,8 +337,7 @@ fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 	struct fq_pie_si *si, int getts)
 {
 	struct mbuf *m;
-
-next:	m = q->mq.head;
+	m = q->mq.head;
 	if (m == NULL)
 		return m;
 	q->mq.head = m->m_nextpkt;
@@ -360,29 +359,65 @@ next:	m = q->mq.head;
 			m_tag_delete(m,mtag); 
 		}
 	}
-
-	if (m->m_pkthdr.rcvif != NULL) {
-		printf("Debug: m->m_pkthdr.rcvif is not NULL\n");
-		
-		// Attempt to restore packet interface information
-		void *rcvif_restore_result = m_rcvif_restore(m);
-		printf("Debug: m_rcvif_restore(m) returned %p\n", rcvif_restore_result);
-		
-		// Check if restoration failed
-		if (__predict_false(rcvif_restore_result == NULL)) {
-			printf("Debug: m_rcvif_restore(m) returned NULL, indicating a problem with restoring the packet interface\n");
-			m_freem(m);
-			printf("Debug: Packet has been freed\n");
-			goto next;
-		} else {
-			printf("Debug: Packet interface restoration succeeded\n");
-		}
-		} else {
-		printf("Debug: m->m_pkthdr.rcvif is NULL\n");
-	}
-
 	return m;
 }
+
+// /*
+//  * Extract a packet from the head of sub-queue 'q'
+//  * Return a packet or NULL if the queue is empty.
+//  * If getts is set, also extract packet's timestamp from mtag.
+//  */
+// __inline static struct mbuf *
+// fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
+// 	struct fq_pie_si *si, int getts)
+// {
+// 	struct mbuf *m;
+
+// next:	m = q->mq.head;
+// 	if (m == NULL)
+// 		return m;
+// 	q->mq.head = m->m_nextpkt;
+
+// 	fq_update_stats(q, si, -m->m_pkthdr.len, 0);
+
+// 	if (si->main_q.ni.length == 0) /* queue is now idle */
+// 			si->main_q.q_time = V_dn_cfg.curr_time;
+
+// 	if (getts) {
+// 		/* extract packet timestamp*/
+// 		struct m_tag *mtag;
+// 		mtag = m_tag_locate(m, MTAG_ABI_COMPAT, DN_AQM_MTAG_TS, NULL);
+// 		if (mtag == NULL){
+// 			D("PIE timestamp mtag not found!");
+// 			*pkt_ts = 0;
+// 		} else {
+// 			*pkt_ts = *(aqm_time_t *)(mtag + 1);
+// 			m_tag_delete(m,mtag); 
+// 		}
+// 	}
+
+// 	if (m->m_pkthdr.rcvif != NULL) {
+// 		printf("Debug: m->m_pkthdr.rcvif is not NULL\n");
+		
+// 		// Attempt to restore packet interface information
+// 		void *rcvif_restore_result = m_rcvif_restore(m);
+// 		printf("Debug: m_rcvif_restore(m) returned %p\n", rcvif_restore_result);
+		
+// 		// Check if restoration failed
+// 		if (__predict_false(rcvif_restore_result == NULL)) {
+// 			printf("Debug: m_rcvif_restore(m) returned NULL, indicating a problem with restoring the packet interface\n");
+// 			m_freem(m);
+// 			printf("Debug: Packet has been freed\n");
+// 			goto next;
+// 		} else {
+// 			printf("Debug: Packet interface restoration succeeded\n");
+// 		}
+// 		} else {
+// 		printf("Debug: m->m_pkthdr.rcvif is NULL\n");
+// 	}
+
+// 	return m;
+// }
 
 /*
  * Callout function for drop probability calculation 
@@ -717,6 +752,21 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
 		&& drop_early(pst, q->stats.len_bytes) == DROP) {
+
+			// Debugging print statements
+			printf("pprms->flags: 0x%X\n", pprms->flags);
+			printf("PIE_ECN_ENABLED: 0x%X\n", PIE_ECN_ENABLED);
+			printf("pst->drop_prob: %d\n", pst->drop_prob);
+			printf("pprms->max_ecnth: %d\n", pprms->max_ecnth);
+			printf("PIE_PROB_BITS: %d\n", PIE_PROB_BITS);
+			printf("PIE_FIX_POINT_BITS: %d\n", PIE_FIX_POINT_BITS);
+			int shift_value = (pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS));
+			printf("Shift value: %d\n", shift_value);
+			printf("Comparing pst->drop_prob (%d) with shift_value (%d)\n", pst->drop_prob, shift_value);
+			
+			int condition = (pprms->flags & PIE_ECN_ENABLED) && (pst->drop_prob < shift_value) && ecn_mark(m);
+			printf("Condition: %d\n", condition);
+
 			/* 
 			 * if drop_prob over ECN threshold, drop the packet 
 			 * otherwise mark and enqueue it.
@@ -724,9 +774,16 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
 				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
 				&& ecn_mark(m))
-				t = ENQUE;
+				{
+					printf("Action: ENQUE\n");
+					t = ENQUE;
+				}
 			else
+			{
+				printf("Action: DROP\n");
 				t = DROP;
+			}
+				
 		}
 
 	/* Turn PIE on when 1/3 of the queue is full */ 
