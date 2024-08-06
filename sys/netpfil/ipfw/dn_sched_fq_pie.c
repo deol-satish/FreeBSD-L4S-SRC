@@ -338,7 +338,7 @@ fq_pie_extract_head(struct fq_pie_flow *q, aqm_time_t *pkt_ts,
 {
 	struct mbuf *m;
 
-next:	m = q->mq.head;
+	m = q->mq.head;
 	if (m == NULL)
 		return m;
 	q->mq.head = m->m_nextpkt;
@@ -359,11 +359,6 @@ next:	m = q->mq.head;
 			*pkt_ts = *(aqm_time_t *)(mtag + 1);
 			m_tag_delete(m,mtag); 
 		}
-	}
-	if (m->m_pkthdr.rcvif != NULL &&
-	    __predict_false(m_rcvif_restore(m) == NULL)) {
-		m_freem(m);
-		goto next;
 	}
 	return m;
 }
