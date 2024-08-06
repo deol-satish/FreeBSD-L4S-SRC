@@ -134,12 +134,16 @@ drop_early(struct pie_status *pst, uint32_t qlen)
 	if (pprms->flags & PIE_DERAND_ENABLED) {
 		if(pst->accu_prob < (uint64_t) (PIE_MAX_PROB * 17 / 20))
 			return ENQUE;
-		 if( pst->accu_prob >= (uint64_t) (PIE_MAX_PROB * 17 / 2))
+		if( pst->accu_prob >= (uint64_t) (PIE_MAX_PROB * 17 / 2))
+		{
+			printf("Accumulated probability (pst->accu_prob) >= 8.5 * PIE_MAX_PROB. Drop 4343.\n");
 			return DROP;
+		}
 	}
 
 	if (random() < pst->drop_prob) {
 		pst->accu_prob = 0;
+		printf("Random decision to drop (random() < pst->drop_prob). Resetting accumulated probability.\n");
 		return DROP;
 	}
 
