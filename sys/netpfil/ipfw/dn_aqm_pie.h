@@ -115,7 +115,14 @@ drop_early(struct pie_status *pst, uint32_t qlen)
 	if ((pst->qdelay_old < (pprms->qdelay_ref >> 1)
 		&& pst->drop_prob < PIE_MAX_PROB / 5 )
 		||  qlen <= 2 * MEAN_PKTSIZE)
-		return ENQUE;
+		{
+			printf("Condition met for ENQUE:\n");
+			printf("pst->qdelay_old < (pprms->qdelay_ref >> 1): %d\n", pst->qdelay_old < (pprms->qdelay_ref >> 1));
+			printf("pst->drop_prob < PIE_MAX_PROB / 5: %d\n", pst->drop_prob < PIE_MAX_PROB / 5);
+			printf("qlen <= 2 * MEAN_PKTSIZE: %d\n", qlen <= 2 * MEAN_PKTSIZE);
+			return ENQUE;
+		}
+		
 
 	if (pst->drop_prob == 0)
 		pst->accu_prob = 0;
@@ -133,7 +140,6 @@ drop_early(struct pie_status *pst, uint32_t qlen)
 	 */
 	if (pprms->flags & PIE_DERAND_ENABLED) {
 		if(pst->accu_prob < (uint64_t) (PIE_MAX_PROB * 17 / 20)){
-            printf("Accumulated probability (pst->accu_prob) < 0.85 * PIE_MAX_PROB. Enqueue.\n");
             return ENQUE;
         }
 		if( pst->accu_prob >= (uint64_t) (PIE_MAX_PROB * 17 / 2))
