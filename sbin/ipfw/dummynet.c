@@ -75,7 +75,7 @@ static struct _s_x dummynet_params[] = {
 	{ "fq_codel",	TOK_FQ_CODEL}, /* FQ-Codel  */
 	{ "pie",		TOK_PIE}, /* PIE AQM */
 	{ "fq_pie",		TOK_FQ_PIE}, /* FQ-PIE */
-	{ "l4s",		TOK_L4S}, /* L4S *
+	{ "l4s",		TOK_L4S}, /* L4S */
 #endif
 	{ "bw",			TOK_BW },
 	{ "bandwidth",		TOK_BW },
@@ -346,7 +346,7 @@ get_extra_parms(uint32_t nr, char *out, int subtype)
 				l += sprintf(out + l, " NoDerand");
 			l += sprintf(out + l, "\n");
 		}
-		else 	if (!strcasecmp(ep->name,"L4S")) {
+		else if (!strcasecmp(ep->name,"L4S")) {
 			us_to_time(ep->par[0], strt1);
 			us_to_time(ep->par[1], strt2);
 			us_to_time(ep->par[2], strt3);
@@ -1243,7 +1243,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 
 			/* Config fq_pie parameters */
 			case TOK_QUANTUM:
-				if (type != TOK_FQ_PIE || type != TOK_L4S)
+				if (type != TOK_FQ_PIE && type != TOK_L4S)
 					errx(EX_DATAERR, "quantum is not for pie\n");
 				if (*ac <= 0 || !is_valid_number(av[0]))
 					errx(EX_DATAERR, "quantum needs number\n");
@@ -1253,7 +1253,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 				break;
 
 			case TOK_LIMIT:
-				if (type != TOK_FQ_PIE || type != TOK_L4S)
+				if (type != TOK_FQ_PIE && type != TOK_L4S)
 					errx(EX_DATAERR, "limit is not for pie, use queue instead\n");
 				if (*ac <= 0 || !is_valid_number(av[0]))
 					errx(EX_DATAERR, "limit needs number\n");
@@ -1263,7 +1263,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 				break;
 
 			case TOK_FLOWS:
-				if (type != TOK_FQ_PIE || type != TOK_L4S)
+				if (type != TOK_FQ_PIE && type != TOK_L4S)
 					errx(EX_DATAERR, "flows is not for pie\n");
 				if (*ac <= 0 || !is_valid_number(av[0]))
 					errx(EX_DATAERR, "flows needs number\n");
