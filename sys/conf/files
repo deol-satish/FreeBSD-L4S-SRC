@@ -4455,6 +4455,7 @@ netpfil/ipfw/dn_heap.c		optional inet dummynet
 netpfil/ipfw/dn_sched_fifo.c	optional inet dummynet
 netpfil/ipfw/dn_sched_fq_codel.c	optional inet dummynet
 netpfil/ipfw/dn_sched_fq_pie.c	optional inet dummynet
+netpfil/ipfw/dn_sched_l4s.c	optional inet dummynet
 netpfil/ipfw/dn_sched_prio.c	optional inet dummynet
 netpfil/ipfw/dn_sched_qfq.c	optional inet dummynet
 netpfil/ipfw/dn_sched_rr.c	optional inet dummynet
