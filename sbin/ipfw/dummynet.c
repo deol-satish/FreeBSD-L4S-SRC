@@ -1289,7 +1289,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 			ep->par[6] = PIE_CAPDROP_ENABLED | PIE_DEPRATEEST_ENABLED
 				| PIE_DERAND_ENABLED;
 		else
-			/* for FQ-PIE, use TS mode */
+			/* for L4S, use TS mode */
 			ep->par[6] = PIE_CAPDROP_ENABLED |  PIE_DERAND_ENABLED
 				| PIE_ECN_ENABLED;
 
