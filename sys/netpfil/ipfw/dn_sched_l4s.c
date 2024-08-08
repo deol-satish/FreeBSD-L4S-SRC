@@ -421,7 +421,7 @@ fq_calculate_drop_prob(void *x)
 	struct dn_aqm_pie_parms *pprms; 
 	int64_t p, prob, oldprob;
 	int p_isneg;
-	//printf("fq_calculate_drop_prob \n");
+	printf("fq_calculate_drop_prob \n");
 
 	pprms = pst->parms;
 	prob = pst->drop_prob;
@@ -1116,7 +1116,7 @@ l4s_dequeue(struct dn_sch_inst *_si)
 static int
 l4s_new_sched(struct dn_sch_inst *_si)
 {
-	//printf("l4s_new_sched \n");
+	printf("l4s_new_sched \n");
 	struct l4s_si *si;
 	struct dn_queue *q;
 	struct l4s_schk *schk;
