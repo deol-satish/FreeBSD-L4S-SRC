@@ -1,5 +1,5 @@
 /*-
- * Codel/FQ_Codel and PIE/FQ_PIE/L4S Code:
+ * Codel/FQ_Codel/L4S and PIE/FQ_PIE/L4S Code:
  * Copyright (C) 2016 Centre for Advanced Internet Architectures,
  *  Swinburne University of Technology, Melbourne, Australia.
  * Portions of this code were made possible in part by a gift from 
@@ -345,8 +345,7 @@ get_extra_parms(uint32_t nr, char *out, int subtype)
 			else
 				l += sprintf(out + l, " NoDerand");
 			l += sprintf(out + l, "\n");
-		}
-		else 	if (!strcasecmp(ep->name,"L4S")) {
+		} else 	if (!strcasecmp(ep->name,"L4S")) {
 			us_to_time(ep->par[0], strt1);
 			us_to_time(ep->par[1], strt2);
 			us_to_time(ep->par[2], strt3);
@@ -1290,7 +1289,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 			ep->par[6] = PIE_CAPDROP_ENABLED | PIE_DEPRATEEST_ENABLED
 				| PIE_DERAND_ENABLED;
 		else
-			/* for L4S, use TS mode */
+			/* for FQ-PIE, use TS mode */
 			ep->par[6] = PIE_CAPDROP_ENABLED |  PIE_DERAND_ENABLED
 				| PIE_ECN_ENABLED;
 
