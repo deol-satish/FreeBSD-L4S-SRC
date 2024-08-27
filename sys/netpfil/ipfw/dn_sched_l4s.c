@@ -876,14 +876,16 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	uint8_t coupling_factor = 2;
 	local_l_prob  = (pst->drop_prob > q->c_base_drop_prob * coupling_factor) ? pst->drop_prob : q->c_base_drop_prob * coupling_factor;
 	bool overload = local_l_prob > PIE_MAX_PROB;
-	int dequeue_action; 
+	int dequeue_action = 1; 
 
-	printf("dequeue_action: %d \n", dequeue_action);
+	
 	
 	if (q->queue_type == CLASSIC_QUEUE)
 		dequeue_action = cqueue_drop_early(pst, q->stats.len_bytes);
 	else if (q->queue_type == L4S_QUEUE)
 		dequeue_action = lqueue_drop_early(pst, q->stats.len_bytes, local_l_prob, overload);
+
+	printf("dequeue_action: %d \n", dequeue_action);
 	
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
