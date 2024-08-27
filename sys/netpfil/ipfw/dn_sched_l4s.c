@@ -81,6 +81,14 @@
 /* list of queues */
 STAILQ_HEAD(l4s_list, l4s_flow);
 
+
+enum { 
+	CLASSIC_QUEUE	= 0,	/* C queue */
+	L4S_QUEUE		= 1,	/* L queue (scalable marking/classic drops) */
+};
+
+
+
 /* L4S parameters including PIE */
 struct dn_sch_l4s_parms {
 	struct dn_aqm_pie_parms	pcfg;	/* PIE configuration Parameters */
@@ -511,7 +519,7 @@ fq_calculate_drop_prob(void *x)
 
 	pst->drop_prob = prob;
 	printf("fq_calculate_drop_prob \n");
-	if (q->queue_type==1)	{
+	if (q->queue_type == L4S_QUEUE)	{
 		printf("Queue type is L4S.  -- ");
 		q->l_base_drop_prob = pst->drop_prob;
 		printf("Assign l_base_drop_prob: %u \n",q->l_base_drop_prob);
@@ -731,6 +739,121 @@ pie_dequeue(struct l4s_flow *q, struct l4s_si *si)
 	return m;
 }
 
+/* 
+* For c-queue drop early, its drop probability is p'^2 
+* Packets in the C queue are subject to a marking probability pC, which is the
+* square of the internal PI2 probability (i.e., have an overall lower mark/drop
+* probability). If the qdisc is overloaded, ignore ECT values and only drop.
+* Note that this marking scheme is also applied to L4S packets during overload.
+*/
+__inline static int
+cqueue_drop_early(struct pie_status *pst, uint32_t qlen)
+{
+	printf("cqueue_drop_early start \n");
+	struct dn_aqm_pie_parms *pprms;
+
+	pprms = pst->parms;
+
+	/* queue is not congested */
+
+	if ((pst->qdelay_old < (pprms->qdelay_ref >> 1)
+		&& pst->drop_prob < PIE_MAX_PROB / 5 )
+		||  qlen <= 2 * MEAN_PKTSIZE)
+		return ENQUE;
+
+	if (pst->drop_prob == 0)
+		pst->accu_prob = 0;
+
+	/* increment accu_prob */
+	if (pprms->flags & PIE_DERAND_ENABLED)
+		pst->accu_prob += pst->drop_prob;
+
+	/* De-randomize option 
+	 * if accu_prob < 0.85 -> enqueue
+	 * if accu_prob>8.5 ->drop
+	 * between 0.85 and 8.5 || !De-randomize --> drop on prob
+	 * 
+	 * (0.85 = 17/20 ,8.5 = 17/2)
+	 */
+	if (pprms->flags & PIE_DERAND_ENABLED) {
+		if(pst->accu_prob < (uint64_t) (PIE_MAX_PROB * 17 / 20))
+			return ENQUE;
+		 if( pst->accu_prob >= (uint64_t) (PIE_MAX_PROB * 17 / 2))
+			return DROP;
+	}
+
+	// Squaring Classic Probability
+	if (random() < pst->drop_prob && random() < pst->drop_prob) {
+		pst->accu_prob = 0;
+		return DROP;
+	}
+
+	return ENQUE;
+}
+
+
+/* 
+ * For l-queue drop early, its drop probability is max(p'_L,p_CL) where p'_L is base probability
+ * and p_CL is internal PI2 probability scaled by the coupling factor
+ *
+ * On overload (i.e., @local_l_prob is >= 100%):
+ * - if the qdisc is configured to trade losses to preserve latency (i.e.,
+ *   @q->drop_overload), apply classic drops first before marking.
+ * - otherwise, preserve the "no loss" property of ECN at the cost of queueing
+ *   delay, eventually resulting in taildrop behavior once sch->limit is
+ *   reached.
+ */
+__inline static int
+lqueue_drop_early(struct pie_status *pst, uint32_t qlen, uint32_t local_l_prob, bool overload)
+{
+	printf("lqueue_drop_early start \n");
+	struct dn_aqm_pie_parms *pprms;
+
+	pprms = pst->parms;
+	/* queue is not congested */
+
+	if ((pst->qdelay_old < (pprms->qdelay_ref >> 1)
+		&& local_l_prob  < PIE_MAX_PROB / 5 )
+		||  qlen <= 2 * MEAN_PKTSIZE)
+		return ENQUE;
+
+	if (local_l_prob  == 0)
+		pst->accu_prob = 0;
+
+	/* increment accu_prob */
+	if (pprms->flags & PIE_DERAND_ENABLED)
+		pst->accu_prob += local_l_prob ;
+
+	/* De-randomize option 
+	 * if accu_prob < 0.85 -> enqueue
+	 * if accu_prob>8.5 ->drop
+	 * between 0.85 and 8.5 || !De-randomize --> drop on prob
+	 * 
+	 * (0.85 = 17/20 ,8.5 = 17/2)
+	 */
+	if (pprms->flags & PIE_DERAND_ENABLED) {
+		if(pst->accu_prob < (uint64_t) (PIE_MAX_PROB * 17 / 20))
+			return ENQUE;
+		 if( pst->accu_prob >= (uint64_t) (PIE_MAX_PROB * 17 / 2))
+			return DROP;
+	}
+
+	if (overload) {
+		if (random() < pst->drop_prob && random() < pst->drop_prob) {
+			pst->accu_prob = 0;
+			return DROP;
+		}
+	}
+	else {
+		if (random() < local_l_prob ) {
+			pst->accu_prob = 0;
+			return DROP;
+		}
+	}	
+
+	return ENQUE;
+}
+
  /*
  * Enqueue a packet in q, subject to space and L4S queue management policy
  * (whose parameters are in q->fs).
@@ -749,10 +872,22 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	pst  = &q->pst;
 	pprms = pst->parms;
 	t = ENQUE;
+	uint32_t local_l_prob ;
+	uint8_t coupling_factor = 2;
+	local_l_prob  = (pst->drop_prob > cbaseprob * coupling_factor) ? pst->drop_prob : cbaseprob * coupling_factor;
+	bool overload = local_l_prob > PIE_MAX_PROB;
+	int dequeue_action; 
 
+	printf("dequeue_action: %d \n", dequeue_action);
+	
+	if (q->queue_type == CLASSIC_QUEUE)
+		dequeue_action = cqueue_drop_early(pst, q->stats.len_bytes);
+	else if (q->queue_type == L4S_QUEUE)
+		dequeue_action = lqueue_drop_early(pst, q->stats.len_bytes, local_l_prob, overload);
+	
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
-		&& drop_early(pst, q->stats.len_bytes) == DROP) {
+		&& dequeue_action == DROP) {
 			/* 
 			 * if drop_prob over ECN threshold, drop the packet 
 			 * otherwise mark and enqueue it.
@@ -761,7 +896,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
 				&& ecn_mark(m))
 				t = ENQUE;
-			else
+			else if (q->queue_type == CLASSIC_QUEUE)
 				t = DROP;
 	}
 
