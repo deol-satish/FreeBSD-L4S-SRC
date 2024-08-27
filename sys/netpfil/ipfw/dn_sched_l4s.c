@@ -511,10 +511,12 @@ fq_calculate_drop_prob(void *x)
 
 	pst->drop_prob = prob;
 	if (q->queue_type==1)	{
+		printf("Queue type is L4S.  -- ");
 		q->l_base_drop_prob = pst->drop_prob;
 		printf("Assign l_base_drop_prob: %u \n",q->l_base_drop_prob);
 	}
 	else	{
+		printf("Queue type is classic.  -- ");
 		q->c_base_drop_prob = pst->drop_prob;
 		printf("Assign c_base_drop_prob: %u \n",q->c_base_drop_prob);
 	}
@@ -934,7 +936,7 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	ip = (struct ip *)mtodo(m, dn_tag_get(m)->iphdr_off);
 	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_ECT1)
 		idx = 1 ;
-	printf("Queue Type: %d \n,",idx);
+	printf("Queue Type: %d \n",idx);
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
 	 * add timestamp to packet (no limit check)*/
