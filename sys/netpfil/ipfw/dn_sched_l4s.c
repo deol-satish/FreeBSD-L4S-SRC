@@ -874,7 +874,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	t = ENQUE;
 	uint32_t local_l_prob ;
 	uint8_t coupling_factor = 2;
-	local_l_prob  = (pst->drop_prob > cbaseprob * coupling_factor) ? pst->drop_prob : cbaseprob * coupling_factor;
+	local_l_prob  = (pst->drop_prob > q->c_base_drop_prob * coupling_factor) ? pst->drop_prob : q->c_base_drop_prob * coupling_factor;
 	bool overload = local_l_prob > PIE_MAX_PROB;
 	int dequeue_action; 
 
