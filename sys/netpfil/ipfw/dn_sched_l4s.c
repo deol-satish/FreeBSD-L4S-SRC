@@ -876,6 +876,8 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	uint8_t coupling_factor = 2;
 	local_l_prob  = (pst->drop_prob > q->c_base_drop_prob * coupling_factor) ? pst->drop_prob : q->c_base_drop_prob * coupling_factor;
 	bool overload = local_l_prob > PIE_MAX_PROB;
+	// Output the boolean value using %s
+    printf("Overload: %s\n", overload ? "true" : "false");
 	int dequeue_action = 1; 
 
 	
