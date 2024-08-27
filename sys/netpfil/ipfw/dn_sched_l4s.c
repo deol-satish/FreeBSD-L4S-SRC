@@ -1121,7 +1121,7 @@ l4s_new_sched(struct dn_sch_inst *_si)
 		// Set queue_type based on the index
 		
     	flows[i].queue_type = i; // i will be 0 for the first queue, 1 for the second queue
-		printf("l4s_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type)
+		printf("l4s_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type);
 		flows[i].l_base_drop_prob = 0;
 		flows[i].c_base_drop_prob = 0;
 	}
