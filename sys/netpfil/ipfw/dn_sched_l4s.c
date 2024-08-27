@@ -1096,10 +1096,10 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	if (!flows[idx].active) {
 		STAILQ_INSERT_TAIL(&si->newflows, &flows[idx], flowchain);
 		//flows[idx].deficit = param->quantum;
-		if (flows[idx]->queue_type == L4S_QUEUE)
-			flows[idx]->deficit = flows[idx]->wl * param->quantum;
+		if (flows[idx].queue_type == L4S_QUEUE)
+			flows[idx].deficit = flows[idx].wl * param->quantum;
 		else
-			flows[idx]->deficit = flows[idx]->wc * param->quantum;
+			flows[idx].deficit = flows[idx].wc * param->quantum;
 		fq_activate_pie(&flows[idx]);
 		flows[idx].active = 1;
 	}
