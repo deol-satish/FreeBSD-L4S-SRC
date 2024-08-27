@@ -510,6 +510,7 @@ fq_calculate_drop_prob(void *x)
 	}
 
 	pst->drop_prob = prob;
+	printf("fq_calculate_drop_prob \n");
 	if (q->queue_type==1)	{
 		printf("Queue type is L4S.  -- ");
 		q->l_base_drop_prob = pst->drop_prob;
@@ -545,7 +546,8 @@ fq_calculate_drop_prob(void *x)
  */
 __inline static void
 fq_activate_pie(struct l4s_flow *q)
-{ 
+{
+	printf("Activate PIE \n"); 
 	struct pie_status *pst = &q->pst;
 	struct dn_aqm_pie_parms *pprms;
 
@@ -582,6 +584,7 @@ fq_deactivate_pie(struct pie_status *pst)
 	callout_stop(&pst->aqm_pie_callout);
 	//D("PIE Deactivated");
 	mtx_unlock(&pst->lock_mtx);
+	printf("Deactivate PIE \n");
 }
 
  /* 
@@ -936,7 +939,7 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	ip = (struct ip *)mtodo(m, dn_tag_get(m)->iphdr_off);
 	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_ECT1)
 		idx = 1 ;
-	printf("Queue Type: %d \n",idx);
+	printf("idx queue Type: %d \n",idx);
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
 	 * add timestamp to packet (no limit check)*/
@@ -1121,7 +1124,7 @@ l4s_new_sched(struct dn_sch_inst *_si)
 		// Set queue_type based on the index
 		
     	flows[i].queue_type = i; // i will be 0 for the first queue, 1 for the second queue
-		printf("l4s_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type);
+		// printf("l4s_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type);
 		flows[i].l_base_drop_prob = 0;
 		flows[i].c_base_drop_prob = 0;
 	}
