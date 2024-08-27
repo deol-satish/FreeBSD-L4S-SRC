@@ -112,6 +112,8 @@ struct l4s_flow {
 	struct mq	mq;	/* list of packets */
 	struct flow_stats stats;	/* statistics */
 	int deficit;
+	uint8_t wl;
+	uint8_t wc;
 	unsigned int queue_type : 1; // 1-bit field, 0 - Classic Queue, and 
 	uint32_t	l_base_drop_prob;
 	uint32_t	c_base_drop_prob;
@@ -1093,7 +1095,11 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	 */
 	if (!flows[idx].active) {
 		STAILQ_INSERT_TAIL(&si->newflows, &flows[idx], flowchain);
-		flows[idx].deficit = param->quantum;
+		//flows[idx].deficit = param->quantum;
+		if (f->queue_type == L4S_QUEUE)
+			f->deficit = f->wl * param->quantum;
+		else
+			f->deficit = f->wc * param->quantum;
 		fq_activate_pie(&flows[idx]);
 		flows[idx].active = 1;
 	}
@@ -1157,7 +1163,11 @@ l4s_dequeue(struct dn_sch_inst *_si)
 			 * Otherwise, the flow will be used for dequeue.
 			 */
 			if (f->deficit < 0) {
-				 f->deficit += param->quantum;
+				//  f->deficit += param->quantum;
+				if (f->queue_type == L4S_QUEUE)
+					f->deficit += f->wl * param->quantum;
+				else
+					f->deficit += f->wc * param->quantum;
 				 STAILQ_REMOVE_HEAD(l4s_flowlist, flowchain);
 				 STAILQ_INSERT_TAIL(&si->oldflows, f, flowchain);
 			 } else 
@@ -1266,6 +1276,8 @@ l4s_new_sched(struct dn_sch_inst *_si)
 		// printf("l4s_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type);
 		flows[i].l_base_drop_prob = 0;
 		flows[i].c_base_drop_prob = 0;
+		flows[i].wc = 1;
+		flows[i].wl = 2;
 	}
 
 	dummynet_sched_lock();
