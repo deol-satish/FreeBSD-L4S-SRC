@@ -547,7 +547,7 @@ fq_calculate_drop_prob(void *x)
 __inline static void
 fq_activate_pie(struct l4s_flow *q)
 {
-	printf("Activate PIE \n"); 
+	printf("Activate PIE :%u \n", q->queue_type); 
 	struct pie_status *pst = &q->pst;
 	struct dn_aqm_pie_parms *pprms;
 
