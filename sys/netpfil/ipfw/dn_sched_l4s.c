@@ -812,8 +812,8 @@ lqueue_drop_early(struct pie_status *pst, uint32_t qlen, uint32_t local_l_prob, 
 	struct dn_aqm_pie_parms *pprms;
 
 	pprms = pst->parms;
-	/* queue is not congested */
 
+	/* queue is not congested */
 	if ((pst->qdelay_old < (pprms->qdelay_ref >> 1)
 		&& local_l_prob  < PIE_MAX_PROB / 5 )
 		||  qlen <= 2 * MEAN_PKTSIZE)
@@ -902,7 +902,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
 				&& ecn_mark(m))
 				t = ENQUE;
-			else if (q->queue_type == CLASSIC_QUEUE)
+			else if (q->queue_type == CLASSIC_QUEUE || q->queue_type == L4S_QUEUE)
 				t = DROP;
 	}
 
