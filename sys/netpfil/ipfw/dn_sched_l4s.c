@@ -880,9 +880,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	bool overload = local_l_prob > PIE_MAX_PROB;
 	// Output the boolean value using %s
     // printf("Overload: %s\n", overload ? "true" : "false");
-	int dequeue_action = 1; 
-
-	
+	int dequeue_action = ENQUE;	
 	
 	if (q->queue_type == CLASSIC_QUEUE)
 		dequeue_action = cqueue_drop_early(pst, q->stats.len_bytes);
@@ -890,6 +888,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 		dequeue_action = lqueue_drop_early(pst, q->stats.len_bytes, local_l_prob, overload);
 
 	// printf("dequeue_action: %d \n", dequeue_action);
+
 	
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
@@ -899,12 +898,33 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 			 * otherwise mark and enqueue it.
 			 */
 			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
-				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
-				&& ecn_mark(m))
-				t = ENQUE;
+				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS)))
+					if (ecn_mark(m))
+					{
+						t = ENQUE;
+						dequeue_action = MARKECN;
+					}
+						
+					else
+					{
+						t = DROP;
+						dequeue_action = DROP;
+					}
+						
 			else if (q->queue_type == CLASSIC_QUEUE || q->queue_type == L4S_QUEUE)
+			{
 				t = DROP;
+				dequeue_action = DROP;
+			}
+				
 	}
+
+
+	printf("\nl4s_ecn_marking-start,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%d,end \n \n",q->queue_type,pprms->qdelay_ref,pprms->tupdate,
+	pprms->max_burst,pprms->max_ecnth,pprms->alpha,pprms->beta,pprms->flags,
+	pst->burst_allowance,pst->drop_prob,pst->current_qdelay,pst->qdelay_old,pst->accu_prob,
+	pst->measurement_start,pst->avg_dq_time,pst->dq_count,pst->sflags,q->stats.tot_pkts,q->stats.tot_bytes,q->stats.length,
+	q->stats.len_bytes,q->stats.drops, dequeue_action);
 
 	/* Turn PIE on when 1/3 of the queue is full */ 
 	if (!(pst->sflags & PIE_ACTIVE) && q->stats.len_bytes >= 
