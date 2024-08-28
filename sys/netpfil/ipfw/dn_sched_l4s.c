@@ -924,7 +924,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	}
 
 
-	printf("\nl4s_ecn_marking-start,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%d,end \n \n",q->queue_type,pprms->qdelay_ref,pprms->tupdate,
+	printf("l4s_ecn_marking-start,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%d,end \n",q->queue_type,pprms->qdelay_ref,pprms->tupdate,
 	pprms->max_burst,pprms->max_ecnth,pprms->alpha,pprms->beta,pprms->flags,
 	pst->burst_allowance,pst->drop_prob,pst->current_qdelay,pst->qdelay_old,pst->accu_prob,
 	pst->measurement_start,pst->avg_dq_time,pst->dq_count,pst->sflags,q->stats.tot_pkts,q->stats.tot_bytes,q->stats.length,
