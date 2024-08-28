@@ -114,7 +114,7 @@ struct l4s_flow {
 	int deficit;
 	uint8_t wl;
 	uint8_t wc;
-	unsigned int queue_type : 1; // 1-bit field, 0 - Classic Queue, and 
+	unsigned int queue_type : 1; // 1-bit field, 0 - Classic Queue, and 1 - L4S Queue
 	uint32_t	l_base_drop_prob;
 	uint32_t	c_base_drop_prob;
 	int active;		/* 1: flow is active (in a list) */
