@@ -897,26 +897,26 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 			 * if drop_prob over ECN threshold, drop the packet 
 			 * otherwise mark and enqueue it.
 			 */
-			printf("Dequeue Action: DROP \n");
+			// printf("Dequeue Action: DROP \n");
 			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
 				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS)))
 					if (ecn_mark(m))
 					{
 						t = ENQUE;
 						dequeue_action = MARKECN;
-						printf("Dequeue Action: MARKECN \n");
+						//printf("Dequeue Action: MARKECN \n");
 					}
 						
 					else
 					{
-						printf("Dequeue Action: DROP BECAUSE ECN DISABLED \n");
+						// printf("Dequeue Action: DROP BECAUSE ECN DISABLED \n");
 						t = DROP;
 						dequeue_action = DROP;
 					}
 						
 			else if (q->queue_type == CLASSIC_QUEUE || q->queue_type == L4S_QUEUE)
 			{
-				printf("Dequeue Action: DROP BECAUSE drop probabbility is greater than threshold \n");
+				// printf("Dequeue Action: DROP BECAUSE drop probabbility is greater than threshold \n");
 				t = DROP;
 				dequeue_action = DROP;
 			}
