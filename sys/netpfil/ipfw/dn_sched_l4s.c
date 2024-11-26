@@ -880,48 +880,29 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	bool overload = local_l_prob > PIE_MAX_PROB;
 	// Output the boolean value using %s
     // printf("Overload: %s\n", overload ? "true" : "false");
-	int dequeue_action = ENQUE;	
-	
+
 	if (q->queue_type == CLASSIC_QUEUE)
-		dequeue_action = cqueue_drop_early(pst, q->stats.len_bytes);
+		t = cqueue_drop_early(pst, q->stats.len_bytes);
 	else if (q->queue_type == L4S_QUEUE)
-		dequeue_action = lqueue_drop_early(pst, q->stats.len_bytes, local_l_prob, overload);
+		t = lqueue_drop_early(pst, q->stats.len_bytes, local_l_prob, overload);
 
 	// printf("dequeue_action: %d \n", dequeue_action);
 
 	
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
-		&& dequeue_action == DROP) {
+		&& t == DROP) {
 			/* 
 			 * if drop_prob over ECN threshold, drop the packet 
 			 * otherwise mark and enqueue it.
 			 */
-			// printf("Dequeue Action: DROP \n");
 			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
-				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS)))
-					if (ecn_mark(m))
-					{
-						t = ENQUE;
-						dequeue_action = MARKECN;
-						//printf("Dequeue Action: MARKECN \n");
-					}
-						
-					else
-					{
-						// printf("Dequeue Action: DROP BECAUSE ECN DISABLED \n");
-						t = DROP;
-						dequeue_action = DROP;
-					}
-						
-			else if (q->queue_type == CLASSIC_QUEUE || q->queue_type == L4S_QUEUE)
-			{
-				// printf("Dequeue Action: DROP BECAUSE drop probabbility is greater than threshold \n");
+				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
+				&& ecn_mark(m))
+				t = ENQUE;
+			else
 				t = DROP;
-				dequeue_action = DROP;
-			}
-				
-	}
+		}
 
 
 	// printf("l4s_ecn_marking-start,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%d,end \n",q->queue_type,pprms->qdelay_ref,pprms->tupdate,
