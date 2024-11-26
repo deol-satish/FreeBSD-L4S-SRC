@@ -691,6 +691,7 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 	pst  = &q->pst;
 	pprms = pst->parms;
 	t = ENQUE;
+	int dequeue_action = ENQUE;	
 
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
@@ -700,12 +701,25 @@ pie_enqueue(struct fq_pie_flow *q, struct mbuf* m, struct fq_pie_si *si)
 			 * otherwise mark and enqueue it.
 			 */
 			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
-				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS))
-				&& ecn_mark(m))
-				t = ENQUE;
+				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS)))
+				{
+					if(ecn_mark(m))
+					{
+						t = ENQUE;
+						dequeue_action = MARKECN;
+					}
+				}	
 			else
+			{
 				t = DROP;
+				dequeue_action = DROP;
+			}
 		}
+	printf("fq_pie_ecn_marking-start,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%d,end \n",pprms->qdelay_ref,pprms->tupdate,
+	pprms->max_burst,pprms->max_ecnth,pprms->alpha,pprms->beta,pprms->flags,
+	pst->burst_allowance,pst->drop_prob,pst->current_qdelay,pst->qdelay_old,pst->accu_prob,
+	pst->measurement_start,pst->avg_dq_time,pst->dq_count,pst->sflags,q->stats.tot_pkts,q->stats.tot_bytes,q->stats.length,
+	q->stats.len_bytes,q->stats.drops, dequeue_action);
 
 	/* Turn PIE on when 1/3 of the queue is full */ 
 	if (!(pst->sflags & PIE_ACTIVE) && q->stats.len_bytes >= 

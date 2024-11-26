@@ -900,13 +900,14 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 			// printf("Dequeue Action: DROP \n");
 			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
 				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS)))
+				{
 					if (ecn_mark(m))
 					{
 						t = ENQUE;
 						dequeue_action = MARKECN;
 						//printf("Dequeue Action: MARKECN \n");
 					}
-						
+				}		
 					else
 					{
 						// printf("Dequeue Action: DROP BECAUSE ECN DISABLED \n");
