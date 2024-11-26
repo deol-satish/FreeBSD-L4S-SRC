@@ -907,14 +907,14 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 						dequeue_action = MARKECN;
 						//printf("Dequeue Action: MARKECN \n");
 					}
-				}		
+						
 					else
 					{
 						// printf("Dequeue Action: DROP BECAUSE ECN DISABLED \n");
 						t = DROP;
 						dequeue_action = DROP;
 					}
-						
+				}		
 			else if (q->queue_type == CLASSIC_QUEUE || q->queue_type == L4S_QUEUE)
 			{
 				// printf("Dequeue Action: DROP BECAUSE drop probabbility is greater than threshold \n");
