@@ -900,6 +900,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 			// printf("Dequeue Action: DROP \n");
 			if (pprms->flags & PIE_ECN_ENABLED && pst->drop_prob < 
 				(pprms->max_ecnth << (PIE_PROB_BITS - PIE_FIX_POINT_BITS)))
+				{
 					if (ecn_mark(m))
 					{
 						t = ENQUE;
@@ -913,7 +914,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 						t = DROP;
 						dequeue_action = DROP;
 					}
-						
+				}		
 			else if (q->queue_type == CLASSIC_QUEUE || q->queue_type == L4S_QUEUE)
 			{
 				// printf("Dequeue Action: DROP BECAUSE drop probabbility is greater than threshold \n");
