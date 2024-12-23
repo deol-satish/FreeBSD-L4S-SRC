@@ -1302,7 +1302,7 @@ l4s_new_sched(struct dn_sch_inst *_si)
 		flows[i].l_base_drop_prob = 0;
 		flows[i].c_base_drop_prob = 0;
 		flows[i].wc = 1;
-		flows[i].wl = 4;
+		flows[i].wl = 2;
 	}
 
 	dummynet_sched_lock();
