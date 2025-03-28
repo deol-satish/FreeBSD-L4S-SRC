@@ -1,5 +1,5 @@
 /*-
- * Codel/FQ_Codel/L4S and PIE/FQ_PIE/L4S Code:
+ * Codel/FQ_Codel/DUALPI2 and PIE/FQ_PIE/DUALPI2 Code:
  * Copyright (C) 2016 Centre for Advanced Internet Architectures,
  *  Swinburne University of Technology, Melbourne, Australia.
  * Portions of this code were made possible in part by a gift from 
@@ -75,7 +75,7 @@ static struct _s_x dummynet_params[] = {
 	{ "fq_codel",	TOK_FQ_CODEL}, /* FQ-Codel  */
 	{ "pie",		TOK_PIE}, /* PIE AQM */
 	{ "fq_pie",		TOK_FQ_PIE}, /* FQ-PIE */
-	{ "l4s",		TOK_L4S}, /* L4S */
+	{ "dualpi2",		TOK_DUALPI2}, /* DUALPI2 */
 #endif
 	{ "bw",			TOK_BW },
 	{ "bandwidth",		TOK_BW },
@@ -345,11 +345,11 @@ get_extra_parms(uint32_t nr, char *out, int subtype)
 			else
 				l += sprintf(out + l, " NoDerand");
 			l += sprintf(out + l, "\n");
-		} else 	if (!strcasecmp(ep->name,"L4S")) {
+		} else 	if (!strcasecmp(ep->name,"DUALPI2")) {
 			us_to_time(ep->par[0], strt1);
 			us_to_time(ep->par[1], strt2);
 			us_to_time(ep->par[2], strt3);
-			l = sprintf(out, "  L4S target %s tupdate %s alpha "
+			l = sprintf(out, "  DUALPI2 target %s tupdate %s alpha "
 				"%g beta %g max_burst %s max_ecnth %.3g"
 				" quantum %jd limit %jd flows %jd",
 				strt1,
@@ -1276,7 +1276,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 			}
 		}
 		break;
-		case TOK_L4S:
+		case TOK_DUALPI2:
 		/* PIE
 		 * 0- target , 1- tupdate, 2- max_burst,
 		 * 3- max_ecnth, 4- alpha,
@@ -1289,7 +1289,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 			ep->par[6] = PIE_CAPDROP_ENABLED | PIE_DEPRATEEST_ENABLED
 				| PIE_DERAND_ENABLED;
 		else
-			/* for L4S, use TS mode */
+			/* for DUALPI2, use TS mode */
 			ep->par[6] = PIE_CAPDROP_ENABLED |  PIE_DERAND_ENABLED
 				| PIE_ECN_ENABLED;
 
@@ -1378,9 +1378,9 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 				ep->par[6] &= ~PIE_DERAND_ENABLED;
 				break;
 
-			/* Config l4s parameters */
+			/* Config dualpi2 parameters */
 			case TOK_QUANTUM:
-				if (type != TOK_L4S)
+				if (type != TOK_DUALPI2)
 					errx(EX_DATAERR, "quantum is not for pie\n");
 				if (*ac <= 0 || !is_valid_number(av[0]))
 					errx(EX_DATAERR, "quantum needs number\n");
@@ -1390,7 +1390,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 				break;
 
 			case TOK_LIMIT:
-				if (type != TOK_L4S)
+				if (type != TOK_DUALPI2)
 					errx(EX_DATAERR, "limit is not for pie, use queue instead\n");
 				if (*ac <= 0 || !is_valid_number(av[0]))
 					errx(EX_DATAERR, "limit needs number\n");
@@ -1400,7 +1400,7 @@ process_extra_parms(int *ac, char **av, struct dn_extra_parms *ep,
 				break;
 
 			case TOK_FLOWS:
-				if (type != TOK_L4S)
+				if (type != TOK_DUALPI2)
 					errx(EX_DATAERR, "flows is not for pie\n");
 				if (*ac <= 0 || !is_valid_number(av[0]))
 					errx(EX_DATAERR, "flows needs number\n");
@@ -1755,12 +1755,12 @@ end_mask:
 			break;
 
 		case TOK_FQ_CODEL:
-		case TOK_L4S:
+		case TOK_DUALPI2:
 		case TOK_FQ_PIE:
 			if (!strcmp(av[-1],"type"))
-				errx(EX_DATAERR, "use type before fq_codel/fq_pie/l4s");
+				errx(EX_DATAERR, "use type before fq_codel/fq_pie/dualpi2");
 
-			NEED(sch, "fq_codel/fq_pie/l4s is only for schd");
+			NEED(sch, "fq_codel/fq_pie/dualpi2 is only for schd");
 			strlcpy(sch_extra->name, av[-1],
 			    sizeof(sch_extra->name));
 			sch_extra->oid.subtype = DN_SCH_PARAMS;
@@ -1837,7 +1837,7 @@ end_mask:
 			/* if fq_codel is selected, consider all tokens after it
 			 * as parameters
 			 */
-			if (!strcasecmp(av[0],"fq_codel") || !strcasecmp(av[0],"fq_pie") || !strcasecmp(av[0],"l4s")){
+			if (!strcasecmp(av[0],"fq_codel") || !strcasecmp(av[0],"fq_pie") || !strcasecmp(av[0],"dualpi2")){
 				strlcpy(sch_extra->name, av[0],
 				    sizeof(sch_extra->name));
 				sch_extra->oid.subtype = DN_SCH_PARAMS;

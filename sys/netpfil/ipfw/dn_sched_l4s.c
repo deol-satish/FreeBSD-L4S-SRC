@@ -1,5 +1,5 @@
 /* 
- * L4S - Low Latency Low Loss Scalable Throughput (L4S) scheduler/AQM
+ * DUALPI2 - Low Latency Low Loss Scalable Throughput (DUALPI2) scheduler/AQM
  * 
  * Copyright (C) 2016 Centre for Advanced Internet Architectures,
  *  Swinburne University of Technology, Melbourne, Australia.
@@ -30,8 +30,8 @@
  */
 
 /* Important note:
- * This L4S implementation is a beta version and have not been tested 
- * extensively. Our L4S uses stand-alone PIE AQM per sub-queue. By
+ * This DUALPI2 implementation is a beta version and have not been tested 
+ * extensively. Our DUALPI2 uses stand-alone PIE AQM per sub-queue. By
  * default, timestamp is used to calculate queue delay instead of departure
  * rate estimation method. Although departure rate estimation is available 
  * as testing option, the results could be incorrect. Moreover, turning PIE on 
@@ -76,10 +76,10 @@
 #include <dn_test.h>
 #endif
 
-#define DN_SCHED_L4S 8
+#define DN_SCHED_DUALPI2 8
 
 /* list of queues */
-STAILQ_HEAD(l4s_list, l4s_flow);
+STAILQ_HEAD(dualpi2_list, dualpi2_flow);
 
 
 enum { 
@@ -89,12 +89,12 @@ enum {
 
 
 
-/* L4S parameters including PIE */
-struct dn_sch_l4s_parms {
+/* DUALPI2 parameters including PIE */
+struct dn_sch_dualpi2_parms {
 	struct dn_aqm_pie_parms	pcfg;	/* PIE configuration Parameters */
-	/* L4S Parameters */
+	/* DUALPI2 Parameters */
 	uint32_t flows_cnt;	/* number of flows */
-	uint32_t limit;	/* hard limit of L4S queue size*/
+	uint32_t limit;	/* hard limit of DUALPI2 queue size*/
 	uint32_t quantum;
 };
 
@@ -108,73 +108,73 @@ struct flow_stats {
 };
 
 /* A flow of packets (sub-queue)*/
-struct l4s_flow {
+struct dualpi2_flow {
 	struct mq	mq;	/* list of packets */
 	struct flow_stats stats;	/* statistics */
 	int deficit;
 	uint8_t wl;
 	uint8_t wc;
-	unsigned int queue_type : 1; // 1-bit field, 0 - Classic Queue, and 1 - L4S Queue
+	unsigned int queue_type : 1; // 1-bit field, 0 - Classic Queue, and 1 - DUALPI2 Queue
 	uint32_t	l_base_drop_prob;
 	uint32_t	c_base_drop_prob;
 	int active;		/* 1: flow is active (in a list) */
 	struct pie_status pst;	/* pie status variables */
-	struct l4s_si_extra *psi_extra;
-	STAILQ_ENTRY(l4s_flow) flowchain;
+	struct dualpi2_si_extra *psi_extra;
+	STAILQ_ENTRY(dualpi2_flow) flowchain;
 };
 
-/* extra l4s scheduler configurations */
-struct l4s_schk {
-	struct dn_sch_l4s_parms cfg;
+/* extra dualpi2 scheduler configurations */
+struct dualpi2_schk {
+	struct dn_sch_dualpi2_parms cfg;
 };
 
-/* l4s scheduler instance extra state vars.
+/* dualpi2 scheduler instance extra state vars.
  * The purpose of separation this structure is to preserve number of active
  * sub-queues and the flows array pointer even after the scheduler instance
  * is destroyed.
  * Preserving these varaiables allows freeing the allocated memory by
- * l4s_callout_cleanup() independently from l4s_free_sched().
+ * dualpi2_callout_cleanup() independently from dualpi2_free_sched().
  */
-struct l4s_si_extra {
+struct dualpi2_si_extra {
 	uint32_t nr_active_q;	/* number of active queues */
-	struct l4s_flow *flows;	/* array of flows (queues) */
+	struct dualpi2_flow *flows;	/* array of flows (queues) */
 	};
 
-/* l4s scheduler instance */
-struct l4s_si {
+/* dualpi2 scheduler instance */
+struct dualpi2_si {
 	struct dn_sch_inst _si;	/* standard scheduler instance. SHOULD BE FIRST */ 
 	struct dn_queue main_q; /* main queue is after si directly */
 	uint32_t perturbation; 	/* random value */
-	struct l4s_list newflows;	/* list of new queues */
-	struct l4s_list oldflows;	/* list of old queues */
-	struct l4s_si_extra *si_extra; /* extra state vars*/
+	struct dualpi2_list newflows;	/* list of new queues */
+	struct dualpi2_list oldflows;	/* list of old queues */
+	struct dualpi2_si_extra *si_extra; /* extra state vars*/
 };
 
-static struct dn_alg l4s_desc;
+static struct dn_alg dualpi2_desc;
 
-/*  Default L4S parameters including PIE */
+/*  Default DUALPI2 parameters including PIE */
 /*  PIE defaults
  * target=15ms, max_burst=150ms, max_ecnth=0.1, 
  * alpha=0.125, beta=1.25, tupdate=15ms
  * FQ-
  * flows=2, limit=10240, quantum =1514
  */
-struct dn_sch_l4s_parms 
- l4s_sysctl = {{15000 * AQM_TIME_1US, 15000 * AQM_TIME_1US,
+struct dn_sch_dualpi2_parms 
+ dualpi2_sysctl = {{15000 * AQM_TIME_1US, 15000 * AQM_TIME_1US,
 	150000 * AQM_TIME_1US, PIE_SCALE * 0.1, PIE_SCALE * 0.125, 
 	PIE_SCALE * 1.25,	PIE_CAPDROP_ENABLED | PIE_DERAND_ENABLED},
 	2, 10240, 1514};
 
 static int
-l4s_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
+dualpi2_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
 
 	if (!strcmp(oidp->oid_name,"alpha"))
-		value = l4s_sysctl.pcfg.alpha;
+		value = dualpi2_sysctl.pcfg.alpha;
 	else
-		value = l4s_sysctl.pcfg.beta;
+		value = dualpi2_sysctl.pcfg.beta;
 		
 	value = value * 1000 / PIE_SCALE;
 	error = sysctl_handle_long(oidp, &value, 0, req);
@@ -184,24 +184,24 @@ l4s_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
 		return (EINVAL);
 	value = (value * PIE_SCALE) / 1000;
 	if (!strcmp(oidp->oid_name,"alpha"))
-			l4s_sysctl.pcfg.alpha = value;
+			dualpi2_sysctl.pcfg.alpha = value;
 	else
-		l4s_sysctl.pcfg.beta = value;
+		dualpi2_sysctl.pcfg.beta = value;
 	return (0);
 }
 
 static int
-l4s_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
+dualpi2_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
 
 	if (!strcmp(oidp->oid_name,"target"))
-		value = l4s_sysctl.pcfg.qdelay_ref;
+		value = dualpi2_sysctl.pcfg.qdelay_ref;
 	else if (!strcmp(oidp->oid_name,"tupdate"))
-		value = l4s_sysctl.pcfg.tupdate;
+		value = dualpi2_sysctl.pcfg.tupdate;
 	else
-		value = l4s_sysctl.pcfg.max_burst;
+		value = dualpi2_sysctl.pcfg.max_burst;
 
 	value = value / AQM_TIME_1US;
 	error = sysctl_handle_long(oidp, &value, 0, req);
@@ -212,21 +212,21 @@ l4s_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
 	value = value * AQM_TIME_1US;
 
 	if (!strcmp(oidp->oid_name,"target"))
-		l4s_sysctl.pcfg.qdelay_ref  = value;
+		dualpi2_sysctl.pcfg.qdelay_ref  = value;
 	else if (!strcmp(oidp->oid_name,"tupdate"))
-		l4s_sysctl.pcfg.tupdate  = value;
+		dualpi2_sysctl.pcfg.tupdate  = value;
 	else
-		l4s_sysctl.pcfg.max_burst = value;
+		dualpi2_sysctl.pcfg.max_burst = value;
 	return (0);
 }
 
 static int
-l4s_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
+dualpi2_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
 
-	value = l4s_sysctl.pcfg.max_ecnth;
+	value = dualpi2_sysctl.pcfg.max_ecnth;
 	value = value * 1000 / PIE_SCALE;
 	error = sysctl_handle_long(oidp, &value, 0, req);
 	if (error != 0 || req->newptr == NULL)
@@ -234,57 +234,57 @@ l4s_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
 	if (value < 1 || value > PIE_SCALE)
 		return (EINVAL);
 	value = (value * PIE_SCALE) / 1000;
-	l4s_sysctl.pcfg.max_ecnth = value;
+	dualpi2_sysctl.pcfg.max_ecnth = value;
 	return (0);
 }
 
-/* define L4S sysctl variables */
+/* define DUALPI2 sysctl variables */
 SYSBEGIN(f4)
 SYSCTL_DECL(_net_inet);
 SYSCTL_DECL(_net_inet_ip);
 SYSCTL_DECL(_net_inet_ip_dummynet);
-static SYSCTL_NODE(_net_inet_ip_dummynet, OID_AUTO, l4s,
+static SYSCTL_NODE(_net_inet_ip_dummynet, OID_AUTO, dualpi2,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
-    "L4S");
+    "DUALPI2");
 
 #ifdef SYSCTL_NODE
 
-SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, target,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, target,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    l4s_sysctl_target_tupdate_maxb_handler, "L",
+    dualpi2_sysctl_target_tupdate_maxb_handler, "L",
     "queue target in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, tupdate,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, tupdate,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    l4s_sysctl_target_tupdate_maxb_handler, "L",
+    dualpi2_sysctl_target_tupdate_maxb_handler, "L",
     "the frequency of drop probability calculation in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, max_burst,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, max_burst,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    l4s_sysctl_target_tupdate_maxb_handler, "L",
+    dualpi2_sysctl_target_tupdate_maxb_handler, "L",
     "Burst allowance interval in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, max_ecnth,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, max_ecnth,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    l4s_sysctl_max_ecnth_handler, "L",
+    dualpi2_sysctl_max_ecnth_handler, "L",
     "ECN safeguard threshold scaled by 1000");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, alpha,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, alpha,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    l4s_sysctl_alpha_beta_handler, "L",
+    dualpi2_sysctl_alpha_beta_handler, "L",
     "PIE alpha scaled by 1000");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_l4s, OID_AUTO, beta,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, beta,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    l4s_sysctl_alpha_beta_handler, "L",
+    dualpi2_sysctl_alpha_beta_handler, "L",
     "beta scaled by 1000");
 
-SYSCTL_UINT(_net_inet_ip_dummynet_l4s, OID_AUTO, quantum,
-	CTLFLAG_RW, &l4s_sysctl.quantum, 1514, "quantum for L4S");
-SYSCTL_UINT(_net_inet_ip_dummynet_l4s, OID_AUTO, flows,
-	CTLFLAG_RW, &l4s_sysctl.flows_cnt, 2, "Number of queues for L4S");
-SYSCTL_UINT(_net_inet_ip_dummynet_l4s, OID_AUTO, limit,
-	CTLFLAG_RW, &l4s_sysctl.limit, 10240, "limit for L4S");
+SYSCTL_UINT(_net_inet_ip_dummynet_dualpi2, OID_AUTO, quantum,
+	CTLFLAG_RW, &dualpi2_sysctl.quantum, 1514, "quantum for DUALPI2");
+SYSCTL_UINT(_net_inet_ip_dummynet_dualpi2, OID_AUTO, flows,
+	CTLFLAG_RW, &dualpi2_sysctl.flows_cnt, 2, "Number of queues for DUALPI2");
+SYSCTL_UINT(_net_inet_ip_dummynet_dualpi2, OID_AUTO, limit,
+	CTLFLAG_RW, &dualpi2_sysctl.limit, 10240, "limit for DUALPI2");
 #endif
 
 /* Helper function to update queue&main-queue and scheduler statistics.
@@ -294,7 +294,7 @@ SYSCTL_UINT(_net_inet_ip_dummynet_l4s, OID_AUTO, limit,
  * positive len + drop -> drop during enqueue
  */
 __inline static void
-fq_update_stats(struct l4s_flow *q, struct l4s_si *si, int len,
+fq_update_stats(struct dualpi2_flow *q, struct dualpi2_si *si, int len,
 	int drop)
 {
 	int inc = 0;
@@ -344,8 +344,8 @@ fq_update_stats(struct l4s_flow *q, struct l4s_si *si, int len,
  * If getts is set, also extract packet's timestamp from mtag.
  */
 __inline static struct mbuf *
-l4s_extract_head(struct l4s_flow *q, aqm_time_t *pkt_ts,
-	struct l4s_si *si, int getts)
+dualpi2_extract_head(struct dualpi2_flow *q, aqm_time_t *pkt_ts,
+	struct dualpi2_si *si, int getts)
 {
 	struct mbuf *m;
 
@@ -381,8 +381,8 @@ l4s_extract_head(struct l4s_flow *q, aqm_time_t *pkt_ts,
 //  * If getts is set, also extract packet's timestamp from mtag.
 //  */
 // __inline static struct mbuf *
-// l4s_extract_head(struct l4s_flow *q, aqm_time_t *pkt_ts,
-// 	struct l4s_si *si, int getts)
+// dualpi2_extract_head(struct dualpi2_flow *q, aqm_time_t *pkt_ts,
+// 	struct dualpi2_si *si, int getts)
 // {
 // 	struct mbuf *m;
 
@@ -418,13 +418,13 @@ l4s_extract_head(struct l4s_flow *q, aqm_time_t *pkt_ts,
 
 /*
  * Callout function for drop probability calculation 
- * This function is called over tupdate ms and takes pointer of L4S
+ * This function is called over tupdate ms and takes pointer of DUALPI2
  * flow as an argument
   */
 static void
 fq_calculate_drop_prob(void *x)
 {
-	struct l4s_flow *q = (struct l4s_flow *) x;
+	struct dualpi2_flow *q = (struct dualpi2_flow *) x;
 	struct pie_status *pst = &q->pst;
 	struct dn_aqm_pie_parms *pprms; 
 	int64_t p, prob, oldprob;
@@ -522,7 +522,7 @@ fq_calculate_drop_prob(void *x)
 	pst->drop_prob = prob;
 	// printf("fq_calculate_drop_prob \n");
 	if (q->queue_type == L4S_QUEUE)	{
-		// printf("Queue type is L4S.  -- ");
+		// printf("Queue type is DUALPI2.  -- ");
 		q->l_base_drop_prob = pst->drop_prob;
 		// printf("Assign l_base_drop_prob: %u \n",q->l_base_drop_prob);
 	}
@@ -555,7 +555,7 @@ fq_calculate_drop_prob(void *x)
  * Reset PIE variables & activate the queue
  */
 __inline static void
-fq_activate_pie(struct l4s_flow *q)
+fq_activate_pie(struct dualpi2_flow *q)
 {
 	// printf("Activate PIE :%u \n", q->queue_type); 
 	struct pie_status *pst = &q->pst;
@@ -601,7 +601,7 @@ fq_deactivate_pie(struct pie_status *pst)
   * Initialize PIE for sub-queue 'q'
   */
 static int
-pie_init(struct l4s_flow *q, struct l4s_schk *l4s_schk)
+pie_init(struct dualpi2_flow *q, struct dualpi2_schk *dualpi2_schk)
 {
 	struct pie_status *pst=&q->pst;
 	struct dn_aqm_pie_parms *pprms = pst->parms;
@@ -615,8 +615,8 @@ pie_init(struct l4s_flow *q, struct l4s_schk *l4s_schk)
 
 		/* For speed optimization, we caculate 1/3 queue size once here */
 		// XXX limit divided by number of queues divided by 3 ??? 
-		pst->one_third_q_size = (l4s_schk->cfg.limit / 
-			l4s_schk->cfg.flows_cnt) / 3;
+		pst->one_third_q_size = (dualpi2_schk->cfg.limit / 
+			dualpi2_schk->cfg.flows_cnt) / 3;
 
 		mtx_init(&pst->lock_mtx, "mtx_pie", NULL, MTX_DEF);
 		callout_init_mtx(&pst->aqm_pie_callout, &pst->lock_mtx,
@@ -627,16 +627,16 @@ pie_init(struct l4s_flow *q, struct l4s_schk *l4s_schk)
 }
 
 /* 
- * callout function to destroy PIE lock, and free l4s flows and l4s si
+ * callout function to destroy PIE lock, and free dualpi2 flows and dualpi2 si
  * extra memory when number of active sub-queues reaches zero.
- * 'x' is a l4s_flow to be destroyed
+ * 'x' is a dualpi2_flow to be destroyed
  */
 static void
-l4s_callout_cleanup(void *x)
+dualpi2_callout_cleanup(void *x)
 {
-	struct l4s_flow *q = x;
+	struct dualpi2_flow *q = x;
 	struct pie_status *pst = &q->pst;
-	struct l4s_si_extra *psi_extra;
+	struct dualpi2_si_extra *psi_extra;
 
 	mtx_unlock(&pst->lock_mtx);
 	mtx_destroy(&pst->lock_mtx);
@@ -645,27 +645,27 @@ l4s_callout_cleanup(void *x)
 	dummynet_sched_lock();
 	psi_extra->nr_active_q--;
 
-	/* when all sub-queues are destroyed, free flows l4s extra vars memory */
+	/* when all sub-queues are destroyed, free flows dualpi2 extra vars memory */
 	if (!psi_extra->nr_active_q) {
 		free(psi_extra->flows, M_DUMMYNET);
 		free(psi_extra, M_DUMMYNET);
-		l4s_desc.ref_count--;
+		dualpi2_desc.ref_count--;
 	}
 	dummynet_sched_unlock();
 }
 
 /* 
  * Clean up PIE status for sub-queue 'q' 
- * Stop callout timer and destroy mtx using l4s_callout_cleanup() callout.
+ * Stop callout timer and destroy mtx using dualpi2_callout_cleanup() callout.
  */
 static int
-pie_cleanup(struct l4s_flow *q)
+pie_cleanup(struct dualpi2_flow *q)
 {
 	struct pie_status *pst  = &q->pst;
 
 	mtx_lock(&pst->lock_mtx);
 	callout_reset_sbt(&pst->aqm_pie_callout,
-		SBT_1US, 0, l4s_callout_cleanup, q, 0);
+		SBT_1US, 0, dualpi2_callout_cleanup, q, 0);
 	mtx_unlock(&pst->lock_mtx);
 	return 0;
 }
@@ -675,7 +675,7 @@ pie_cleanup(struct l4s_flow *q)
  * Also, caculate depature time or queue delay using timestamp
  */
  static struct mbuf *
-pie_dequeue(struct l4s_flow *q, struct l4s_si *si)
+pie_dequeue(struct dualpi2_flow *q, struct dualpi2_si *si)
 {
 	struct mbuf *m;
 	struct dn_aqm_pie_parms *pprms;
@@ -688,7 +688,7 @@ pie_dequeue(struct l4s_flow *q, struct l4s_si *si)
 	pprms = q->pst.parms;
 
 	/*we extarct packet ts only when Departure Rate Estimation dis not used*/
-	m = l4s_extract_head(q, &pkt_ts, si, 
+	m = dualpi2_extract_head(q, &pkt_ts, si, 
 		!(pprms->flags & PIE_DEPRATEEST_ENABLED));
 
 	if (!m || !(pst->sflags & PIE_ACTIVE))
@@ -746,7 +746,7 @@ pie_dequeue(struct l4s_flow *q, struct l4s_si *si)
 * Packets in the C queue are subject to a marking probability pC, which is the
 * square of the internal PI2 probability (i.e., have an overall lower mark/drop
 * probability). If the qdisc is overloaded, ignore ECT values and only drop.
-* Note that this marking scheme is also applied to L4S packets during overload.
+* Note that this marking scheme is also applied to DUALPI2 packets during overload.
 */
 __inline static int
 cqueue_drop_early(struct pie_status *pst, uint32_t qlen)
@@ -857,13 +857,13 @@ lqueue_drop_early(struct pie_status *pst, uint32_t qlen, uint32_t local_l_prob, 
 }
 
  /*
- * Enqueue a packet in q, subject to space and L4S queue management policy
+ * Enqueue a packet in q, subject to space and DUALPI2 queue management policy
  * (whose parameters are in q->fs).
  * Update stats for the queue and the scheduler.
  * Return 0 on success, 1 on drop. The packet is consumed anyways.
  */
 static int
-pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
+pie_enqueue(struct dualpi2_flow *q, struct mbuf* m, struct dualpi2_si *si)
 {
 	uint64_t len;
 	struct pie_status *pst;
@@ -905,7 +905,7 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 		}
 
 
-	// printf("l4s_ecn_marking-start,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%d,end \n",q->queue_type,pprms->qdelay_ref,pprms->tupdate,
+	// printf("dualpi2_ecn_marking-start,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%d,end \n",q->queue_type,pprms->qdelay_ref,pprms->tupdate,
 	// pprms->max_burst,pprms->max_ecnth,pprms->alpha,pprms->beta,pprms->flags,
 	// pst->burst_allowance,pst->drop_prob,pst->current_qdelay,pst->qdelay_old,pst->accu_prob,
 	// pst->measurement_start,pst->avg_dq_time,pst->dq_count,pst->sflags,q->stats.tot_pkts,q->stats.tot_bytes,q->stats.length,
@@ -956,9 +956,9 @@ pie_enqueue(struct l4s_flow *q, struct mbuf* m, struct l4s_si *si)
 	return 0;
 }
 
-/* Drop a packet form the head of L4S sub-queue */
+/* Drop a packet form the head of DUALPI2 sub-queue */
 static void
-pie_drop_head(struct l4s_flow *q, struct l4s_si *si)
+pie_drop_head(struct dualpi2_flow *q, struct dualpi2_si *si)
 {
 	struct mbuf *m = q->mq.head;
 
@@ -983,7 +983,7 @@ pie_drop_head(struct l4s_flow *q, struct l4s_si *si)
  * src port, dst port,
  */
 static inline int
-l4s_classify_flow(struct mbuf *m, uint16_t fcount, struct l4s_si *si)
+dualpi2_classify_flow(struct mbuf *m, uint16_t fcount, struct dualpi2_si *si)
 {
 	struct ip *ip;
 	struct tcphdr *th;
@@ -1053,32 +1053,32 @@ l4s_classify_flow(struct mbuf *m, uint16_t fcount, struct l4s_si *si)
 
 /*
  * Enqueue a packet into an appropriate queue according to
- * L4S; algorithm.
+ * DUALPI2; algorithm.
  */
 static int 
-l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q, 
+dualpi2_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q, 
 	struct mbuf *m)
 { 
-	struct l4s_si *si;
-	struct l4s_schk *schk;
-	struct dn_sch_l4s_parms *param;
+	struct dualpi2_si *si;
+	struct dualpi2_schk *schk;
+	struct dn_sch_dualpi2_parms *param;
 	struct dn_queue *mainq;
-	struct l4s_flow *flows;
+	struct dualpi2_flow *flows;
 	int idx, drop, i, maxidx;
 
 	mainq = (struct dn_queue *)(_si + 1);
-	si = (struct l4s_si *)_si;
+	si = (struct dualpi2_si *)_si;
 	flows = si->si_extra->flows;
-	schk = (struct l4s_schk *)(si->_si.sched+1);
+	schk = (struct dualpi2_schk *)(si->_si.sched+1);
 	param = &schk->cfg;
 
 	 /* classify a packet to queue number*/
-	// idx = l4s_classify_flow(m, param->flows_cnt/2, si);
+	// idx = dualpi2_classify_flow(m, param->flows_cnt/2, si);
 	
 
-	/* Read IP packet header to classify packet into L4S and CLassic Queues
+	/* Read IP packet header to classify packet into DUALPI2 and CLassic Queues
 	* 0 - Classic Queue - Default
-	* 1 - L4S Queue - ECT1 enabled in its packet header
+	* 1 - DUALPI2 Queue - ECT1 enabled in its packet header
 	*/
 	idx = 0;
     struct ip *ip;
@@ -1133,34 +1133,34 @@ l4s_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 
 /*
  * Dequeue a packet from an appropriate queue according to
- * L4S algorithm.
+ * DUALPI2 algorithm.
  */
 static struct mbuf *
-l4s_dequeue(struct dn_sch_inst *_si)
+dualpi2_dequeue(struct dn_sch_inst *_si)
 { 
-	struct l4s_si *si;
-	struct l4s_schk *schk;
-	struct dn_sch_l4s_parms *param;
-	struct l4s_flow *f;
+	struct dualpi2_si *si;
+	struct dualpi2_schk *schk;
+	struct dn_sch_dualpi2_parms *param;
+	struct dualpi2_flow *f;
 	struct mbuf *mbuf;
-	struct l4s_list *l4s_flowlist;
+	struct dualpi2_list *dualpi2_flowlist;
 
-	si = (struct l4s_si *)_si;
-	schk = (struct l4s_schk *)(si->_si.sched+1);
+	si = (struct dualpi2_si *)_si;
+	schk = (struct dualpi2_schk *)(si->_si.sched+1);
 	param = &schk->cfg;
 
 	do {
 		/* select a list to start with */
 		if (STAILQ_EMPTY(&si->newflows))
-			l4s_flowlist = &si->oldflows;
+			dualpi2_flowlist = &si->oldflows;
 		else
-			l4s_flowlist = &si->newflows;
+			dualpi2_flowlist = &si->newflows;
 
 		/* Both new and old queue lists are empty, return NULL */
-		if (STAILQ_EMPTY(l4s_flowlist)) 
+		if (STAILQ_EMPTY(dualpi2_flowlist)) 
 			return NULL;
 
-		f = STAILQ_FIRST(l4s_flowlist);
+		f = STAILQ_FIRST(dualpi2_flowlist);
 		while (f != NULL)	{
 			/* if there is no flow(sub-queue) deficit, increase deficit
 			 * by quantum, move the flow to the tail of old flows list
@@ -1173,16 +1173,16 @@ l4s_dequeue(struct dn_sch_inst *_si)
 					f->deficit += f->wl * param->quantum;
 				else
 					f->deficit += f->wc * param->quantum;
-				 STAILQ_REMOVE_HEAD(l4s_flowlist, flowchain);
+				 STAILQ_REMOVE_HEAD(dualpi2_flowlist, flowchain);
 				 STAILQ_INSERT_TAIL(&si->oldflows, f, flowchain);
 			 } else 
 				 break;
 
-			f = STAILQ_FIRST(l4s_flowlist);
+			f = STAILQ_FIRST(dualpi2_flowlist);
 		}
 		
 		/* the new flows list is empty, try old flows list */
-		if (STAILQ_EMPTY(l4s_flowlist)) 
+		if (STAILQ_EMPTY(dualpi2_flowlist)) 
 			continue;
 
 		/* Dequeue a packet from the selected flow */
@@ -1194,13 +1194,13 @@ l4s_dequeue(struct dn_sch_inst *_si)
 			 * it to the tail of old flows list. Otherwise, deactivate it and
 			 * remove it from the old list and
 			 */
-			if (l4s_flowlist == &si->newflows) {
-				STAILQ_REMOVE_HEAD(l4s_flowlist, flowchain);
+			if (dualpi2_flowlist == &si->newflows) {
+				STAILQ_REMOVE_HEAD(dualpi2_flowlist, flowchain);
 				STAILQ_INSERT_TAIL(&si->oldflows, f, flowchain);
 			}	else {
 				f->active = 0;
 				fq_deactivate_pie(&f->pst);
-				STAILQ_REMOVE_HEAD(l4s_flowlist, flowchain);
+				STAILQ_REMOVE_HEAD(dualpi2_flowlist, flowchain);
 			}
 			/* start again */
 			continue;
@@ -1218,20 +1218,20 @@ l4s_dequeue(struct dn_sch_inst *_si)
 }
 
 /*
- * Initialize l4s scheduler instance.
+ * Initialize dualpi2 scheduler instance.
  * also, allocate memory for flows array.
  */
 static int
-l4s_new_sched(struct dn_sch_inst *_si)
+dualpi2_new_sched(struct dn_sch_inst *_si)
 {
-	struct l4s_si *si;
+	struct dualpi2_si *si;
 	struct dn_queue *q;
-	struct l4s_schk *schk;
-	struct l4s_flow *flows;
+	struct dualpi2_schk *schk;
+	struct dualpi2_flow *flows;
 	int i;
 
-	si = (struct l4s_si *)_si;
-	schk = (struct l4s_schk *)(_si->sched+1);
+	si = (struct dualpi2_si *)_si;
+	schk = (struct dualpi2_schk *)(_si->sched+1);
 
 	if(si->si_extra) {
 		D("si already configured!");
@@ -1245,20 +1245,20 @@ l4s_new_sched(struct dn_sch_inst *_si)
 	q->fs = _si->sched->fs;
 
 	/* allocate memory for scheduler instance extra vars */
-	si->si_extra = malloc(sizeof(struct l4s_si_extra),
+	si->si_extra = malloc(sizeof(struct dualpi2_si_extra),
 		 M_DUMMYNET, M_NOWAIT | M_ZERO);
 	if (si->si_extra == NULL) {
-		D("cannot allocate memory for l4s si extra vars");
+		D("cannot allocate memory for dualpi2 si extra vars");
 		return ENOMEM ; 
 	}
 	/* allocate memory for flows array */
 	si->si_extra->flows = mallocarray(schk->cfg.flows_cnt,
-	    sizeof(struct l4s_flow), M_DUMMYNET, M_NOWAIT | M_ZERO);
+	    sizeof(struct dualpi2_flow), M_DUMMYNET, M_NOWAIT | M_ZERO);
 	flows = si->si_extra->flows;
 	if (flows == NULL) {
 		free(si->si_extra, M_DUMMYNET);
 		si->si_extra = NULL;
-		D("cannot allocate memory for l4s flows");
+		D("cannot allocate memory for dualpi2 flows");
 		return ENOMEM ; 
 	}
 
@@ -1278,7 +1278,7 @@ l4s_new_sched(struct dn_sch_inst *_si)
 		// Set queue_type based on the index
 		
     	flows[i].queue_type = i; // i will be 0 for the first queue, 1 for the second queue
-		// printf("l4s_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type);
+		// printf("dualpi2_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type);
 		flows[i].l_base_drop_prob = 0;
 		flows[i].c_base_drop_prob = 0;
 		flows[i].wc = 1;
@@ -1286,25 +1286,25 @@ l4s_new_sched(struct dn_sch_inst *_si)
 	}
 
 	dummynet_sched_lock();
-	l4s_desc.ref_count++;
+	dualpi2_desc.ref_count++;
 	dummynet_sched_unlock();
 
 	return 0;
 }
 
 /*
- * Free l4s scheduler instance.
+ * Free dualpi2 scheduler instance.
  */
 static int
-l4s_free_sched(struct dn_sch_inst *_si)
+dualpi2_free_sched(struct dn_sch_inst *_si)
 {
-	struct l4s_si *si;
-	struct l4s_schk *schk;
-	struct l4s_flow *flows;
+	struct dualpi2_si *si;
+	struct dualpi2_schk *schk;
+	struct dualpi2_flow *flows;
 	int i;
 
-	si = (struct l4s_si *)_si;
-	schk = (struct l4s_schk *)(_si->sched+1);
+	si = (struct dualpi2_si *)_si;
+	schk = (struct dualpi2_schk *)(_si->sched+1);
 	flows = si->si_extra->flows;
 	for (i = 0; i < schk->cfg.flows_cnt; i++) {
 		pie_cleanup(&flows[i]);
@@ -1314,49 +1314,49 @@ l4s_free_sched(struct dn_sch_inst *_si)
 }
 
 /*
- * Configure L4S scheduler.
+ * Configure DUALPI2 scheduler.
  * the configurations for the scheduler is passed fromipfw  userland.
  */
 static int
-l4s_config(struct dn_schk *_schk)
+dualpi2_config(struct dn_schk *_schk)
 {
-	struct l4s_schk *schk;
+	struct dualpi2_schk *schk;
 	struct dn_extra_parms *ep;
-	struct dn_sch_l4s_parms *fqp_cfg;
+	struct dn_sch_dualpi2_parms *fqp_cfg;
 
-	schk = (struct l4s_schk *)(_schk+1);
+	schk = (struct dualpi2_schk *)(_schk+1);
 	ep = (struct dn_extra_parms *) _schk->cfg;
 
-	/* par array contains l4s configuration as follow
+	/* par array contains dualpi2 configuration as follow
 	 * PIE: 0- qdelay_ref,1- tupdate, 2- max_burst
 	 * 3- max_ecnth, 4- alpha, 5- beta, 6- flags
-	 * L4S: 7- quantum, 8- limit, 9- flows
+	 * DUALPI2: 7- quantum, 8- limit, 9- flows
 	 */
 	if (ep && ep->oid.len ==sizeof(*ep) &&
 		ep->oid.subtype == DN_SCH_PARAMS) {
 		fqp_cfg = &schk->cfg;
 		if (ep->par[0] < 0)
-			fqp_cfg->pcfg.qdelay_ref = l4s_sysctl.pcfg.qdelay_ref;
+			fqp_cfg->pcfg.qdelay_ref = dualpi2_sysctl.pcfg.qdelay_ref;
 		else
 			fqp_cfg->pcfg.qdelay_ref = ep->par[0];
 		if (ep->par[1] < 0)
-			fqp_cfg->pcfg.tupdate = l4s_sysctl.pcfg.tupdate;
+			fqp_cfg->pcfg.tupdate = dualpi2_sysctl.pcfg.tupdate;
 		else
 			fqp_cfg->pcfg.tupdate = ep->par[1];
 		if (ep->par[2] < 0)
-			fqp_cfg->pcfg.max_burst = l4s_sysctl.pcfg.max_burst;
+			fqp_cfg->pcfg.max_burst = dualpi2_sysctl.pcfg.max_burst;
 		else
 			fqp_cfg->pcfg.max_burst = ep->par[2];
 		if (ep->par[3] < 0)
-			fqp_cfg->pcfg.max_ecnth = l4s_sysctl.pcfg.max_ecnth;
+			fqp_cfg->pcfg.max_ecnth = dualpi2_sysctl.pcfg.max_ecnth;
 		else
 			fqp_cfg->pcfg.max_ecnth = ep->par[3];
 		if (ep->par[4] < 0)
-			fqp_cfg->pcfg.alpha = l4s_sysctl.pcfg.alpha;
+			fqp_cfg->pcfg.alpha = dualpi2_sysctl.pcfg.alpha;
 		else
 			fqp_cfg->pcfg.alpha = ep->par[4];
 		if (ep->par[5] < 0)
-			fqp_cfg->pcfg.beta = l4s_sysctl.pcfg.beta;
+			fqp_cfg->pcfg.beta = dualpi2_sysctl.pcfg.beta;
 		else
 			fqp_cfg->pcfg.beta = ep->par[5];
 		if (ep->par[6] < 0)
@@ -1366,15 +1366,15 @@ l4s_config(struct dn_schk *_schk)
 
 		/* FQ configurations */
 		if (ep->par[7] < 0)
-			fqp_cfg->quantum = l4s_sysctl.quantum;
+			fqp_cfg->quantum = dualpi2_sysctl.quantum;
 		else
 			fqp_cfg->quantum = ep->par[7];
 		if (ep->par[8] < 0)
-			fqp_cfg->limit = l4s_sysctl.limit;
+			fqp_cfg->limit = dualpi2_sysctl.limit;
 		else
 			fqp_cfg->limit = ep->par[8];
 		if (1)
-			fqp_cfg->flows_cnt = l4s_sysctl.flows_cnt;
+			fqp_cfg->flows_cnt = dualpi2_sysctl.flows_cnt;
 		else
 			fqp_cfg->flows_cnt = ep->par[9];
 
@@ -1395,7 +1395,7 @@ l4s_config(struct dn_schk *_schk)
 		fqp_cfg->flows_cnt= BOUND_VAR(fqp_cfg->flows_cnt,1,65536);
 	}
 	else {
-		D("Wrong parameters for l4s scheduler");
+		D("Wrong parameters for dualpi2 scheduler");
 		return 1;
 	}
 
@@ -1403,17 +1403,17 @@ l4s_config(struct dn_schk *_schk)
 }
 
 /*
- * Return L4S scheduler configurations
+ * Return DUALPI2 scheduler configurations
  * the configurations for the scheduler is passed to userland.
  */
 static int 
-l4s_getconfig (struct dn_schk *_schk, struct dn_extra_parms *ep) {
-	struct l4s_schk *schk = (struct l4s_schk *)(_schk+1);
-	struct dn_sch_l4s_parms *fqp_cfg;
+dualpi2_getconfig (struct dn_schk *_schk, struct dn_extra_parms *ep) {
+	struct dualpi2_schk *schk = (struct dualpi2_schk *)(_schk+1);
+	struct dn_sch_dualpi2_parms *fqp_cfg;
 
 	fqp_cfg = &schk->cfg;
 
-	strcpy(ep->name, l4s_desc.name);
+	strcpy(ep->name, dualpi2_desc.name);
 	ep->par[0] = fqp_cfg->pcfg.qdelay_ref;
 	ep->par[1] = fqp_cfg->pcfg.tupdate;
 	ep->par[2] = fqp_cfg->pcfg.max_burst;
@@ -1430,31 +1430,31 @@ l4s_getconfig (struct dn_schk *_schk, struct dn_extra_parms *ep) {
 }
 
 /*
- *  L4S scheduler descriptor
+ *  DUALPI2 scheduler descriptor
  * contains the type of the scheduler, the name, the size of extra
  * data structures, and function pointers.
  */
-static struct dn_alg l4s_desc = {
-	_SI( .type = )  DN_SCHED_L4S,
-	_SI( .name = ) "L4S",
+static struct dn_alg dualpi2_desc = {
+	_SI( .type = )  DN_SCHED_DUALPI2,
+	_SI( .name = ) "DUALPI2",
 	_SI( .flags = ) 0,
 
-	_SI( .schk_datalen = ) sizeof(struct l4s_schk),
-	_SI( .si_datalen = ) sizeof(struct l4s_si) - sizeof(struct dn_sch_inst),
+	_SI( .schk_datalen = ) sizeof(struct dualpi2_schk),
+	_SI( .si_datalen = ) sizeof(struct dualpi2_si) - sizeof(struct dn_sch_inst),
 	_SI( .q_datalen = ) 0,
 
-	_SI( .enqueue = ) l4s_enqueue,
-	_SI( .dequeue = ) l4s_dequeue,
-	_SI( .config = ) l4s_config, /* new sched i.e. sched X config ...*/
+	_SI( .enqueue = ) dualpi2_enqueue,
+	_SI( .dequeue = ) dualpi2_dequeue,
+	_SI( .config = ) dualpi2_config, /* new sched i.e. sched X config ...*/
 	_SI( .destroy = ) NULL,  /*sched x delete */
-	_SI( .new_sched = ) l4s_new_sched, /* new schd instance */
-	_SI( .free_sched = ) l4s_free_sched,	/* delete schd instance */
+	_SI( .new_sched = ) dualpi2_new_sched, /* new schd instance */
+	_SI( .free_sched = ) dualpi2_free_sched,	/* delete schd instance */
 	_SI( .new_fsk = ) NULL,
 	_SI( .free_fsk = ) NULL,
 	_SI( .new_queue = ) NULL,
 	_SI( .free_queue = ) NULL,
-	_SI( .getconfig = )  l4s_getconfig,
+	_SI( .getconfig = )  dualpi2_getconfig,
 	_SI( .ref_count = ) 0
 };
 
-DECLARE_DNSCHED_MODULE(dn_l4s, &l4s_desc);
+DECLARE_DNSCHED_MODULE(dn_dualpi2, &dualpi2_desc);
