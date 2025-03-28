@@ -78,10 +78,16 @@
 #include <dn_test.h>
 #endif
 
-#define DN_SCHED_DUALPI2 7
+#define DN_SCHED_DUALPI2 8
 
 /* list of queues */
 STAILQ_HEAD(dualpi2_list, dualpi2_flow);
+
+/* Define Type of Queues in DUALPI2 */
+enum { 
+	CLASSIC_QUEUE	= 0,	/* C queue */
+	L4S_QUEUE		= 1,	/* L queue (scalable marking/classic drops) */
+};
 
 /* DUALPI2 parameters including PIE */
 struct dn_sch_dualpi2_parms {
@@ -106,6 +112,11 @@ struct dualpi2_flow {
 	struct mq	mq;	/* list of packets */
 	struct flow_stats stats;	/* statistics */
 	int deficit;
+	uint8_t wl;
+	uint8_t wc;
+	unsigned int queue_type : 1; // 1-bit field, 0 - Classic Queue, and 1 - L4S Queue
+	uint32_t	l_base_drop_prob;
+	uint32_t	c_base_drop_prob;
 	int active;		/* 1: flow is active (in a list) */
 	struct pie_status pst;	/* pie status variables */
 	struct dualpi2_si_extra *psi_extra;
@@ -122,7 +133,7 @@ struct dualpi2_schk {
  * sub-queues and the flows array pointer even after the scheduler instance
  * is destroyed.
  * Preserving these varaiables allows freeing the allocated memory by
- * fqpie_callout_cleanup() independently from dualpi2_free_sched().
+ * dualpi2_callout_cleanup() independently from dualpi2_free_sched().
  */
 struct dualpi2_si_extra {
 	uint32_t nr_active_q;	/* number of active queues */
@@ -152,10 +163,10 @@ struct dn_sch_dualpi2_parms
  dualpi2_sysctl = {{15000 * AQM_TIME_1US, 15000 * AQM_TIME_1US,
 	150000 * AQM_TIME_1US, PIE_SCALE * 0.1, PIE_SCALE * 0.125, 
 	PIE_SCALE * 1.25,	PIE_CAPDROP_ENABLED | PIE_DERAND_ENABLED},
-	1024, 10240, 1514};
+	2, 10240, 1514};
 
 static int
-fqpie_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
+dualpi2_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
@@ -180,7 +191,7 @@ fqpie_sysctl_alpha_beta_handler(SYSCTL_HANDLER_ARGS)
 }
 
 static int
-fqpie_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
+dualpi2_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
@@ -210,7 +221,7 @@ fqpie_sysctl_target_tupdate_maxb_handler(SYSCTL_HANDLER_ARGS)
 }
 
 static int
-fqpie_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
+dualpi2_sysctl_max_ecnth_handler(SYSCTL_HANDLER_ARGS)
 {
 	int error;
 	long  value;
@@ -232,47 +243,47 @@ SYSBEGIN(f4)
 SYSCTL_DECL(_net_inet);
 SYSCTL_DECL(_net_inet_ip);
 SYSCTL_DECL(_net_inet_ip_dummynet);
-static SYSCTL_NODE(_net_inet_ip_dummynet, OID_AUTO, fqpie,
+static SYSCTL_NODE(_net_inet_ip_dummynet, OID_AUTO, dualpi2,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "DUALPI2");
 
 #ifdef SYSCTL_NODE
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, target,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, target,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_target_tupdate_maxb_handler, "L",
+    dualpi2_sysctl_target_tupdate_maxb_handler, "L",
     "queue target in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, tupdate,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, tupdate,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_target_tupdate_maxb_handler, "L",
+    dualpi2_sysctl_target_tupdate_maxb_handler, "L",
     "the frequency of drop probability calculation in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, max_burst,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, max_burst,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_target_tupdate_maxb_handler, "L",
+    dualpi2_sysctl_target_tupdate_maxb_handler, "L",
     "Burst allowance interval in microsecond");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, max_ecnth,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, max_ecnth,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_max_ecnth_handler, "L",
+    dualpi2_sysctl_max_ecnth_handler, "L",
     "ECN safeguard threshold scaled by 1000");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, alpha,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, alpha,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_alpha_beta_handler, "L",
+    dualpi2_sysctl_alpha_beta_handler, "L",
     "PIE alpha scaled by 1000");
 
-SYSCTL_PROC(_net_inet_ip_dummynet_fqpie, OID_AUTO, beta,
+SYSCTL_PROC(_net_inet_ip_dummynet_dualpi2, OID_AUTO, beta,
     CTLTYPE_LONG | CTLFLAG_RW | CTLFLAG_NEEDGIANT, NULL, 0,
-    fqpie_sysctl_alpha_beta_handler, "L",
+    dualpi2_sysctl_alpha_beta_handler, "L",
     "beta scaled by 1000");
 
-SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, quantum,
+SYSCTL_UINT(_net_inet_ip_dummynet_dualpi2, OID_AUTO, quantum,
 	CTLFLAG_RW, &dualpi2_sysctl.quantum, 1514, "quantum for DUALPI2");
-SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, flows,
-	CTLFLAG_RW, &dualpi2_sysctl.flows_cnt, 1024, "Number of queues for DUALPI2");
-SYSCTL_UINT(_net_inet_ip_dummynet_fqpie, OID_AUTO, limit,
+SYSCTL_UINT(_net_inet_ip_dummynet_dualpi2, OID_AUTO, flows,
+	CTLFLAG_RW, &dualpi2_sysctl.flows_cnt, 2, "Number of queues for DUALPI2");
+SYSCTL_UINT(_net_inet_ip_dummynet_dualpi2, OID_AUTO, limit,
 	CTLFLAG_RW, &dualpi2_sysctl.limit, 10240, "limit for DUALPI2");
 #endif
 
@@ -472,6 +483,17 @@ fq_calculate_drop_prob(void *x)
 	}
 
 	pst->drop_prob = prob;
+	     // printf("fq_calculate_drop_prob \n");
+		 if (q->queue_type == L4S_QUEUE)	{
+			// printf("Queue type is L4S.  -- ");
+			q->l_base_drop_prob = pst->drop_prob;
+			// printf("Assign l_base_drop_prob: %u \n",q->l_base_drop_prob);
+		}
+		else	{
+			// printf("Queue type is classic.  -- ");
+			q->c_base_drop_prob = pst->drop_prob;
+			// printf("Assign c_base_drop_prob: %u \n",q->c_base_drop_prob);
+		}
 
 	/* store current delay value */
 	pst->qdelay_old = pst->current_qdelay;
@@ -506,6 +528,8 @@ fq_activate_pie(struct dualpi2_flow *q)
 
 	pprms = pst->parms;
 	pst->drop_prob = 0;
+	q->l_base_drop_prob=0;
+	q->c_base_drop_prob=0;
 	pst->qdelay_old = 0;
 	pst->burst_allowance = pprms->max_burst;
 	pst->accu_prob = 0;
@@ -538,7 +562,7 @@ fq_deactivate_pie(struct pie_status *pst)
   * Initialize PIE for sub-queue 'q'
   */
 static int
-pie_init(struct dualpi2_flow *q, struct dualpi2_schk *fqpie_schk)
+pie_init(struct dualpi2_flow *q, struct dualpi2_schk *dualpi2_schk)
 {
 	struct pie_status *pst=&q->pst;
 	struct dn_aqm_pie_parms *pprms = pst->parms;
@@ -552,8 +576,8 @@ pie_init(struct dualpi2_flow *q, struct dualpi2_schk *fqpie_schk)
 
 		/* For speed optimization, we caculate 1/3 queue size once here */
 		// XXX limit divided by number of queues divided by 3 ??? 
-		pst->one_third_q_size = (fqpie_schk->cfg.limit / 
-			fqpie_schk->cfg.flows_cnt) / 3;
+		pst->one_third_q_size = (dualpi2_schk->cfg.limit / 
+			dualpi2_schk->cfg.flows_cnt) / 3;
 
 		mtx_init(&pst->lock_mtx, "mtx_pie", NULL, MTX_DEF);
 		callout_init_mtx(&pst->aqm_pie_callout, &pst->lock_mtx,
@@ -569,7 +593,7 @@ pie_init(struct dualpi2_flow *q, struct dualpi2_schk *fqpie_schk)
  * 'x' is a dualpi2_flow to be destroyed
  */
 static void
-fqpie_callout_cleanup(void *x)
+dualpi2_callout_cleanup(void *x)
 {
 	struct dualpi2_flow *q = x;
 	struct pie_status *pst = &q->pst;
@@ -593,7 +617,7 @@ fqpie_callout_cleanup(void *x)
 
 /* 
  * Clean up PIE status for sub-queue 'q' 
- * Stop callout timer and destroy mtx using fqpie_callout_cleanup() callout.
+ * Stop callout timer and destroy mtx using dualpi2_callout_cleanup() callout.
  */
 static int
 pie_cleanup(struct dualpi2_flow *q)
@@ -602,7 +626,7 @@ pie_cleanup(struct dualpi2_flow *q)
 
 	mtx_lock(&pst->lock_mtx);
 	callout_reset_sbt(&pst->aqm_pie_callout,
-		SBT_1US, 0, fqpie_callout_cleanup, q, 0);
+		SBT_1US, 0, dualpi2_callout_cleanup, q, 0);
 	mtx_unlock(&pst->lock_mtx);
 	return 0;
 }
@@ -678,6 +702,121 @@ pie_dequeue(struct dualpi2_flow *q, struct dualpi2_si *si)
 	return m;
 }
 
+ /* 
+ * For c-queue drop early, its drop probability is p'^2 
+ * Packets in the C queue are subject to a marking probability pC, which is the
+ * square of the internal PI2 probability (i.e., have an overall lower mark/drop
+ * probability). If the qdisc is overloaded, ignore ECT values and only drop.
+ * Note that this marking scheme is also applied to L4S packets during overload.
+ */
+__inline static int
+cqueue_drop_early(struct pie_status *pst, uint32_t qlen)
+{
+	// printf("cqueue_drop_early start \n");
+	struct dn_aqm_pie_parms *pprms;
+
+	pprms = pst->parms;
+
+	/* queue is not congested */
+
+	if ((pst->qdelay_old < (pprms->qdelay_ref >> 1)
+		&& pst->drop_prob < PIE_MAX_PROB / 5 )
+		||  qlen <= 2 * MEAN_PKTSIZE)
+		return ENQUE;
+
+	if (pst->drop_prob == 0)
+		pst->accu_prob = 0;
+
+	/* increment accu_prob */
+	if (pprms->flags & PIE_DERAND_ENABLED)
+		pst->accu_prob += pst->drop_prob;
+
+	/* De-randomize option 
+	 * if accu_prob < 0.85 -> enqueue
+	 * if accu_prob>8.5 ->drop
+	 * between 0.85 and 8.5 || !De-randomize --> drop on prob
+	 * 
+	 * (0.85 = 17/20 ,8.5 = 17/2)
+	 */
+	if (pprms->flags & PIE_DERAND_ENABLED) {
+		if(pst->accu_prob < (uint64_t) (PIE_MAX_PROB * 17 / 20))
+			return ENQUE;
+		 if( pst->accu_prob >= (uint64_t) (PIE_MAX_PROB * 17 / 2))
+			return DROP;
+	}
+
+	// Squaring Classic Probability
+	if (random() < pst->drop_prob && random() < pst->drop_prob) {
+		pst->accu_prob = 0;
+		return DROP;
+	}
+
+	return ENQUE;
+}
+
+
+/* 
+ * For l-queue drop early, its drop probability is max(p'_L,p_CL) where p'_L is base probability
+ * and p_CL is internal PI2 probability scaled by the coupling factor
+ *
+ * On overload (i.e., @local_l_prob is >= 100%):
+ * - if the qdisc is configured to trade losses to preserve latency (i.e.,
+ *   @q->drop_overload), apply classic drops first before marking.
+ * - otherwise, preserve the "no loss" property of ECN at the cost of queueing
+ *   delay, eventually resulting in taildrop behavior once sch->limit is
+ *   reached.
+ */
+__inline static int
+lqueue_drop_early(struct pie_status *pst, uint32_t qlen, uint32_t local_l_prob, bool overload)
+{
+	// printf("lqueue_drop_early start \n");
+	struct dn_aqm_pie_parms *pprms;
+
+	pprms = pst->parms;
+
+	/* queue is not congested */
+	if ((pst->qdelay_old < (pprms->qdelay_ref >> 1)
+		&& local_l_prob  < PIE_MAX_PROB / 5 )
+		||  qlen <= 2 * MEAN_PKTSIZE)
+		return ENQUE;
+
+	if (local_l_prob  == 0)
+		pst->accu_prob = 0;
+
+	/* increment accu_prob */
+	if (pprms->flags & PIE_DERAND_ENABLED)
+		pst->accu_prob += local_l_prob ;
+
+	/* De-randomize option 
+	 * if accu_prob < 0.85 -> enqueue
+	 * if accu_prob>8.5 ->drop
+	 * between 0.85 and 8.5 || !De-randomize --> drop on prob
+	 * 
+	 * (0.85 = 17/20 ,8.5 = 17/2)
+	 */
+	if (pprms->flags & PIE_DERAND_ENABLED) {
+		if(pst->accu_prob < (uint64_t) (PIE_MAX_PROB * 17 / 20))
+			return ENQUE;
+		 if( pst->accu_prob >= (uint64_t) (PIE_MAX_PROB * 17 / 2))
+			return DROP;
+	}
+
+	if (overload) {
+		if (random() < pst->drop_prob && random() < pst->drop_prob) {
+			pst->accu_prob = 0;
+			return DROP;
+		}
+	}
+	else {
+		if (random() < local_l_prob ) {
+			pst->accu_prob = 0;
+			return DROP;
+		}
+	}	
+
+	return ENQUE;
+}
+
  /*
  * Enqueue a packet in q, subject to space and FQ-PIE queue management policy
  * (whose parameters are in q->fs).
@@ -696,10 +835,23 @@ pie_enqueue(struct dualpi2_flow *q, struct mbuf* m, struct dualpi2_si *si)
 	pst  = &q->pst;
 	pprms = pst->parms;
 	t = ENQUE;
+	uint32_t local_l_prob ;
+	uint8_t coupling_factor = 2;
+	local_l_prob  = (pst->drop_prob > q->c_base_drop_prob * coupling_factor) ? pst->drop_prob : q->c_base_drop_prob * coupling_factor;
+	bool overload = local_l_prob > PIE_MAX_PROB;
+	// Output the boolean value using %s
+	// printf("Overload: %s\n", overload ? "true" : "false");
+
+	if (q->queue_type == CLASSIC_QUEUE)
+		t = cqueue_drop_early(pst, q->stats.len_bytes);
+	else if (q->queue_type == L4S_QUEUE)
+		t = lqueue_drop_early(pst, q->stats.len_bytes, local_l_prob, overload);
+
+	// printf("dequeue_action: %d \n", dequeue_action);
 
 	/* drop/mark the packet when PIE is active and burst time elapsed */
 	if (pst->sflags & PIE_ACTIVE && pst->burst_allowance == 0
-		&& drop_early(pst, q->stats.len_bytes) == DROP) {
+		&& t == DROP) {
 			/* 
 			 * if drop_prob over ECN threshold, drop the packet 
 			 * otherwise mark and enqueue it.
@@ -879,6 +1031,17 @@ dualpi2_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	 /* classify a packet to queue number*/
 	idx = dualpi2_classify_flow(m, param->flows_cnt, si);
 
+	/* Read IP packet header to classify packet into L4S and CLassic Queues
+     * 0 - Classic Queue - Default
+     * 1 - L4S Queue - ECT1 enabled in its packet header
+    */
+	idx = 0;
+	struct ip *ip;
+	ip = (struct ip *)mtodo(m, dn_tag_get(m)->iphdr_off);
+	if ((ip->ip_tos & IPTOS_ECN_MASK) == IPTOS_ECN_ECT1)
+		idx = 1 ;
+	printf("idx queue Type: %d \n",idx);
+
 	/* enqueue packet into appropriate queue using PIE AQM.
 	 * Note: 'pie_enqueue' function returns 1 only when it unable to 
 	 * add timestamp to packet (no limit check)*/
@@ -893,7 +1056,11 @@ dualpi2_enqueue(struct dn_sch_inst *_si, struct dn_queue *_q,
 	 */
 	if (!flows[idx].active) {
 		STAILQ_INSERT_TAIL(&si->newflows, &flows[idx], flowchain);
-		flows[idx].deficit = param->quantum;
+		// flows[idx].deficit = param->quantum;
+		if (flows[idx].queue_type == L4S_QUEUE)
+			flows[idx].deficit = flows[idx].wl * param->quantum;
+		else
+			flows[idx].deficit = flows[idx].wc * param->quantum;
 		fq_activate_pie(&flows[idx]);
 		flows[idx].active = 1;
 	}
@@ -957,7 +1124,11 @@ dualpi2_dequeue(struct dn_sch_inst *_si)
 			 * Otherwise, the flow will be used for dequeue.
 			 */
 			if (f->deficit < 0) {
-				 f->deficit += param->quantum;
+				//  f->deficit += param->quantum;
+				 if (f->queue_type == L4S_QUEUE)
+				 	f->deficit += f->wl * param->quantum;
+				else
+					f->deficit += f->wc * param->quantum;
 				 STAILQ_REMOVE_HEAD(dualpi2_flowlist, flowchain);
 				 STAILQ_INSERT_TAIL(&si->oldflows, f, flowchain);
 			 } else 
@@ -1060,6 +1231,14 @@ dualpi2_new_sched(struct dn_sch_inst *_si)
 		flows[i].pst.parms = &schk->cfg.pcfg;
 		flows[i].psi_extra = si->si_extra;
 		pie_init(&flows[i], schk);
+
+		// Set queue_type based on the index
+		flows[i].queue_type = i; // i will be 0 for the first queue, 1 for the second queue
+		printf("dualpi2_new_sched: i:%d ----- queue_type:%u \n",i,flows[i].queue_type);
+		flows[i].l_base_drop_prob = 0;
+		flows[i].c_base_drop_prob = 0;
+		flows[i].wc = 1;
+		flows[i].wl = 2;
 	}
 
 	dummynet_sched_lock();
@@ -1150,7 +1329,9 @@ dualpi2_config(struct dn_schk *_schk)
 			fqp_cfg->limit = dualpi2_sysctl.limit;
 		else
 			fqp_cfg->limit = ep->par[8];
-		if (ep->par[9] < 0)
+		// if (ep->par[9] < 0)
+		// 	fqp_cfg->flows_cnt = dualpi2_sysctl.flows_cnt;
+		if (1)
 			fqp_cfg->flows_cnt = dualpi2_sysctl.flows_cnt;
 		else
 			fqp_cfg->flows_cnt = ep->par[9];
