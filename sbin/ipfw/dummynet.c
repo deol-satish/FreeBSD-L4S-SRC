@@ -309,11 +309,49 @@ get_extra_parms(uint32_t nr, char *out, int subtype)
 			else
 				l += sprintf(out + l, " NoECN");
 			l += sprintf(out + l, "\n");
-		} else 	if (!strcasecmp(ep->name,"FQ_PIE") || !strcasecmp(ep->name,"DUALPI2")) {
+		} else 	if (!strcasecmp(ep->name,"FQ_PIE")) {
 			us_to_time(ep->par[0], strt1);
 			us_to_time(ep->par[1], strt2);
 			us_to_time(ep->par[2], strt3);
-			l = sprintf(out, "  FQ_PIE DUALPI2 target %s tupdate %s alpha "
+			l = sprintf(out, "  FQ_PIE target %s tupdate %s alpha "
+				"%g beta %g max_burst %s max_ecnth %.3g"
+				" quantum %jd limit %jd flows %jd",
+				strt1,
+				strt2,
+				ep->par[4] / (float) PIE_SCALE,
+				ep->par[5] / (float) PIE_SCALE,
+				strt3,
+				ep->par[3] / (float) PIE_SCALE,
+				(intmax_t) ep->par[7],
+				(intmax_t) ep->par[8],
+				(intmax_t) ep->par[9]
+			);
+			
+			if (ep->par[6] & PIE_ECN_ENABLED)
+				l += sprintf(out + l, " ECN");
+			else
+				l += sprintf(out + l, " NoECN");
+			if (ep->par[6] & PIE_CAPDROP_ENABLED)
+				l += sprintf(out + l, " CapDrop");
+			else
+				l += sprintf(out + l, " NoCapDrop");
+			if (ep->par[6] & PIE_ON_OFF_MODE_ENABLED)
+				l += sprintf(out + l, " OnOff");
+			if (ep->par[6] & PIE_DEPRATEEST_ENABLED)
+				l += sprintf(out + l, " DRE");
+			else
+				l += sprintf(out + l, " TS");
+			if (ep->par[6] & PIE_DERAND_ENABLED)
+				l += sprintf(out + l, " Derand");
+			else
+				l += sprintf(out + l, " NoDerand");
+			l += sprintf(out + l, "\n");
+		}
+		else if (!strcasecmp(ep->name,"DUALPI2")) {
+			us_to_time(ep->par[0], strt1);
+			us_to_time(ep->par[1], strt2);
+			us_to_time(ep->par[2], strt3);
+			l = sprintf(out, " DUALPI2 target %s tupdate %s alpha "
 				"%g beta %g max_burst %s max_ecnth %.3g"
 				" quantum %jd limit %jd flows %jd",
 				strt1,
