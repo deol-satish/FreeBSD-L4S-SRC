@@ -1244,6 +1244,7 @@ dualpi2_dequeue(struct dn_sch_inst *_si)
 static int
 dualpi2_new_sched(struct dn_sch_inst *_si)
 {
+	printf("start dualpi2_new_sched\n");
 	struct dualpi2_si *si;
 	struct dn_queue *q;
 	struct dualpi2_schk *schk;
